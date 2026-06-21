@@ -1,6 +1,6 @@
 """Tests for postprocessing: locale number parsing, date parsing, total reconciliation.
 
-These are the model-independent guarantees (spec Task 5): we never trust the
+These are the model-independent guarantees: we never trust the
 model's arithmetic or number formatting — we re-parse and re-check here.
 """
 
@@ -11,6 +11,7 @@ import pytest
 
 from app.postprocess import (
     normalize_raw,
+    parse_category,
     parse_decimal,
     parse_invoice_date,
     reconcile_totals,
@@ -73,6 +74,28 @@ def test_parse_invoice_date_unparseable_is_none(raw):
 
 def test_parse_invoice_date_passthrough_date():
     assert parse_invoice_date(date(2026, 6, 21)) == date(2026, 6, 21)
+
+
+# --- parse_category --------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("groceries", "groceries"),
+        ("Groceries", "groceries"),       # case-normalized
+        ("  MEDICAL ", "medical"),        # trimmed
+        ("restaurant", "other"),          # off-list -> other
+        ("", None),
+        (None, None),
+    ],
+)
+def test_parse_category_canonicalizes(raw, expected):
+    assert parse_category(raw) == expected
+
+
+def test_normalize_raw_coerces_category():
+    out = normalize_raw({"category": "Shopping"})
+    assert out["category"] == "shopping"
 
 
 # --- normalize_raw ---------------------------------------------------------

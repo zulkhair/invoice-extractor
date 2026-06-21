@@ -1,29 +1,40 @@
 """System prompt + schema injection.
 
 The schema block is generated from the Pydantic model (schema.py) so the prompt
-and the validator can never drift. The system prompt states the hard rule from
-the spec: never fabricate; null for absent fields.
+and the validator can never drift. The system prompt states the hard rule:
+never fabricate; null for absent fields.
 """
 
 from __future__ import annotations
 
 import json
 
-from app.schema import invoice_json_schema
+from app.schema import CATEGORIES, invoice_json_schema
 
 _SYSTEM = """\
-You are a precise invoice data-extraction engine. You convert a single invoice \
-into JSON that conforms EXACTLY to the schema below.
+You are a precise receipt/invoice data-extraction engine for a personal expense \
+tracker. You convert a single receipt or invoice into JSON that conforms EXACTLY \
+to the schema below.
 
 Hard rules:
 - Output ONLY a single JSON object. No prose, no markdown, no code fences.
-- If a field is not present on the invoice, return null. NEVER guess or fabricate.
+- If a field is not present, return null. NEVER guess or fabricate.
 - Copy values as printed. Do NOT reformat numbers or dates, do NOT do arithmetic,
   do NOT convert currencies. Downstream code normalizes formats and checks totals.
 - For money fields, return the digits/grouping exactly as shown (e.g. "1.250.000,00").
-- currency is the ISO 4217 code if determinable (e.g. IDR, USD), else null.
-- line_items: one object per line on the invoice; omit the list (empty) if none.
-- vendor_tax_id is the seller's tax number (NPWP for Indonesian invoices) if shown.
+- vendor_name is the store or business name — the place where the money was spent,
+  usually printed at the top (not the legal "PT ..." entity unless that is all there is).
+- currency is the ISO 4217 code (IDR for Indonesian receipts, USD, ...), else null.
+- total_amount is the final amount actually charged (the grand total). It is NOT the
+  cash given ("Tunai"/"Cash") nor the change ("Kembalian"/"Change").
+- line_items: one object per PURCHASED item. Do NOT include summary lines such as
+  subtotal, discount, service, tax/PPN, or total as line items. Empty list if none.
+- category: classify the whole purchase into EXACTLY ONE of: {categories}. Guidance —
+  groceries = food/drinks/daily needs from a minimarket or supermarket (Alfamart,
+  Indomaret, etc.); dining = restaurants, cafes, food courts; medical = clinic,
+  pharmacy, hospital, health; transport = fuel, ride-hailing, parking, tolls;
+  utilities = electricity, water, internet, phone bills; shopping = non-food retail
+  (clothes, electronics, household goods); entertainment = leisure; other = none fit.
 
 JSON schema (your output must validate against this):
 {schema}
@@ -47,7 +58,7 @@ Remember: null for anything absent.
 
 def system_prompt() -> str:
     schema_str = json.dumps(invoice_json_schema(), indent=2)
-    return _SYSTEM.format(schema=schema_str)
+    return _SYSTEM.format(schema=schema_str, categories=", ".join(CATEGORIES))
 
 
 def text_user_prompt(document_text: str) -> str:

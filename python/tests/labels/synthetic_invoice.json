@@ -27,5 +27,6 @@
   ],
   "subtotal": "4600000",
   "tax_amount": "506000",
-  "total_amount": "5106000"
+  "total_amount": "5106000",
+  "category": "groceries"
 }

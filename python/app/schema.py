@@ -1,4 +1,4 @@
-"""Canonical output schema — the single source of truth (spec Section 5).
+"""Canonical output schema — the single source of truth.
 
 The JSON schema the model is prompted with is generated from this model, and
 every model response is validated against it. All fields are nullable: the model
@@ -11,6 +11,19 @@ from datetime import date
 from decimal import Decimal
 
 from pydantic import BaseModel, Field
+
+# Spending categories for the expense tracker. The model classifies each receipt
+# into exactly one of these; postprocess coerces anything off-list to "other".
+CATEGORIES = (
+    "groceries",
+    "dining",
+    "medical",
+    "transport",
+    "utilities",
+    "shopping",
+    "entertainment",
+    "other",
+)
 
 
 class LineItem(BaseModel):
@@ -31,12 +44,17 @@ class Invoice(BaseModel):
     subtotal: Decimal | None = None
     tax_amount: Decimal | None = None         # PPN where present
     total_amount: Decimal | None = None
+    category: str | None = Field(
+        default=None,
+        description="Spending category, exactly one of: " + ", ".join(CATEGORIES),
+    )
     raw_notes: str | None = None
 
 
 # Fields we consider "required-ish": if the text path leaves any of these null,
-# the pipeline falls back to the vision model (spec Task 4).
-REQUIRED_ISH_FIELDS = ("vendor_name", "invoice_number", "total_amount")
+# the pipeline falls back to the vision model. (Receipts often have no invoice
+# number, and we don't track it — so it is not a fallback trigger.)
+REQUIRED_ISH_FIELDS = ("vendor_name", "total_amount")
 
 
 def invoice_json_schema() -> dict:

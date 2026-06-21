@@ -1,6 +1,6 @@
 """Field-level accuracy scoring: compare a predicted Invoice to ground truth.
 
-Used by scripts/bench.py (the decision tool) and tests/test_extraction.py. Scalar
+Used by scripts/bench.py (the decision tool) and tests/test_scoring.py. Scalar
 fields are scored exact-match (strings normalized for whitespace/case); line items
 get precision/recall via greedy description+amount matching.
 """
@@ -11,17 +11,16 @@ from pydantic import BaseModel
 
 from app.schema import Invoice, LineItem
 
-# Scalar fields scored for exact match (line_items scored separately; raw_notes ignored).
+# Scalar fields scored for exact match (line_items scored separately). Tuned for the
+# expense tracker: what/where/when/how-much + category. Fields not tracked for personal
+# finance (tax, invoice number, NPWP, due date, subtotal) are still extracted but not
+# scored. raw_notes is always ignored.
 SCALAR_FIELDS = (
     "vendor_name",
-    "vendor_tax_id",
-    "invoice_number",
     "invoice_date",
-    "due_date",
     "currency",
-    "subtotal",
-    "tax_amount",
     "total_amount",
+    "category",
 )
 
 

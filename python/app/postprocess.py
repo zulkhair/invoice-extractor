@@ -1,7 +1,7 @@
 """Post-processing: turn the model's raw, locale-formatted strings into canonical
 Decimal/date values, and re-check totals ourselves.
 
-Core principle (spec Task 5): never trust the model's number formatting or
+Core principle: never trust the model's number formatting or
 arithmetic. Parse locale formats deterministically here, then reconcile
 line items vs subtotal vs total and flag inconsistencies.
 """
@@ -15,7 +15,7 @@ from decimal import Decimal, InvalidOperation
 from dateutil import parser as date_parser
 from pydantic import BaseModel
 
-from app.schema import Invoice
+from app.schema import CATEGORIES, Invoice
 
 # --- numbers ---------------------------------------------------------------
 
@@ -116,6 +116,22 @@ def parse_invoice_date(value) -> date | None:
     return dt.date()
 
 
+# --- category --------------------------------------------------------------
+
+def parse_category(value) -> str | None:
+    """Canonicalize a spending category to the known vocabulary.
+
+    Lowercase + trim; anything off-list becomes "other" so the tracker only ever
+    sees the fixed buckets. Empty/None stays None (model did not classify).
+    """
+    if value is None:
+        return None
+    s = str(value).strip().lower()
+    if not s:
+        return None
+    return s if s in CATEGORIES else "other"
+
+
 # --- raw normalization -----------------------------------------------------
 
 _MONEY_FIELDS = ("subtotal", "tax_amount", "total_amount")
@@ -126,8 +142,8 @@ _LINE_MONEY = ("quantity", "unit_price", "amount")
 def normalize_raw(raw: dict) -> dict:
     """Normalize a raw model dict into types the Invoice schema accepts.
 
-    Locale numbers -> Decimal, date strings -> date, unparseable -> None.
-    Returns a new dict; does not mutate the input.
+    Locale numbers -> Decimal, date strings -> date, category -> known bucket,
+    unparseable -> None. Returns a new dict; does not mutate the input.
     """
     out = dict(raw)
     for f in _MONEY_FIELDS:
@@ -136,6 +152,8 @@ def normalize_raw(raw: dict) -> dict:
     for f in _DATE_FIELDS:
         if f in out:
             out[f] = parse_invoice_date(out[f])
+    if "category" in out:
+        out["category"] = parse_category(out["category"])
     items = out.get("line_items")
     if isinstance(items, list):
         norm_items = []

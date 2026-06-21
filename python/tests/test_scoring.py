@@ -1,4 +1,4 @@
-"""Tests for field-level accuracy scoring (the bench harness core, spec Task 7)."""
+"""Tests for field-level accuracy scoring (the benchmark harness core)."""
 
 from datetime import date
 from decimal import Decimal
@@ -14,6 +14,7 @@ def _gold() -> Invoice:
         invoice_date=date(2026, 6, 21),
         currency="IDR",
         total_amount=Decimal("277500"),
+        category="groceries",
         line_items=[
             LineItem(description="Mangga Harum Manis", amount=Decimal("250000")),
             LineItem(description="Jeruk", amount=Decimal("27500")),
@@ -52,9 +53,16 @@ def test_missing_line_item_lowers_recall_not_precision():
     assert s.line_item_precision == 1.0
 
 
+def test_wrong_category_counts_against():
+    pred = _gold().model_copy(update={"category": "dining"})
+    s = score_invoice(pred, _gold())
+    assert s.per_field["category"] is False
+    assert s.per_field["vendor_name"] is True
+
+
 def test_null_vs_value_is_incorrect_but_null_vs_null_is_correct():
-    gold = Invoice(vendor_name="X", invoice_number=None)
-    pred = Invoice(vendor_name=None, invoice_number=None)
+    gold = Invoice(vendor_name="X", category=None)
+    pred = Invoice(vendor_name=None, category=None)
     s = score_invoice(pred, gold)
     assert s.per_field["vendor_name"] is False     # gold had a value, pred null
-    assert s.per_field["invoice_number"] is True   # both null
+    assert s.per_field["category"] is True         # both null
