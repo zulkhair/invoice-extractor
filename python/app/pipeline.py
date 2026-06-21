@@ -1,4 +1,4 @@
-"""Routing: text-layer path vs vision path, with fallback (spec Tasks 3 & 4).
+"""Routing: text-layer path vs vision path, with fallback.
 
     PDF with text layer        -> text path  (cheap/fast)
     scanned PDF / image        -> vision path
@@ -149,18 +149,26 @@ def _parse(content: str) -> Invoice | None:
         return None
 
 
+# Decode JSON numbers as their raw text, not Python int/float. A model that emits a
+# locale-formatted amount as a bare number (e.g. 25.000 for "twenty-five thousand")
+# would otherwise be decoded by json as 25.0 — the thousands-dot silently eaten.
+# Keeping the original text lets postprocess.parse_decimal apply locale rules
+# ("25.000" -> 25000), so it no longer matters whether the model quotes its numbers.
+_RAW_NUMBERS = {"parse_int": str, "parse_float": str}
+
+
 def _loads_lenient(content: str):
     """Tolerate stray prose/code-fences around the JSON object."""
     if not content:
         return None
     try:
-        return json.loads(content)
+        return json.loads(content, **_RAW_NUMBERS)
     except json.JSONDecodeError:
         pass
     m = re.search(r"\{.*\}", content, re.DOTALL)
     if m:
         try:
-            return json.loads(m.group(0))
+            return json.loads(m.group(0), **_RAW_NUMBERS)
         except json.JSONDecodeError:
             return None
     return None
