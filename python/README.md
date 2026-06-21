@@ -1,0 +1,99 @@
+# Invoice Extractor (local, Ollama)
+
+Self-hosted invoice → schema-validated JSON. PDF or image in, clean `Invoice`
+JSON out. Inference runs **locally via Ollama** — documents never leave the
+machine. Quantized GGUF models keep VRAM low, so it runs on modest GPUs (and CPU).
+
+## Hard constraints (do not violate)
+
+- **Ollama only.** No vLLM — runs on older GPUs (e.g. Pascal, compute 6.1) where vLLM (needs 7.0+) won't.
+- **Quantized GGUF only — never FP16.** Older GPUs run FP16 far slower than FP32. Use Q4/Q5.
+- **Fit your VRAM.** Keep model + projector + context within available VRAM (defaults fit ~6 GB).
+- **Verify model tags before hardcoding** — registry tags drift (`ollama show <tag>`).
+- **Vision must actually work** — every vision model must pass the Task 2 sanity check.
+
+## Architecture (hybrid)
+
+```
+Invoice (PDF/image)
+  ├─ has embedded text layer? ─(PyMuPDF)─► text + schema ─► LLM (text mode) ─► JSON
+  └─ scanned / no text layer  ─(rasterize)─► image + schema ─► VLM (vision) ─► JSON
+                                                                   │ validate (Pydantic)
+                                                   low-confidence / null required fields?
+                                                                   └─► retry with vision model
+```
+
+Text-mode calls are cheaper/faster and keep the single GPU free; only scans/images
+hit the heavy vision model.
+
+## Model tags (VERIFIED 2026-06-21)
+
+The spec named **"NuExtract3 4B"**, which **does not exist**. Verified substitutions:
+
+| Role | Spec asked | Resolved tag | Size | Vision | Notes |
+|------|-----------|--------------|------|--------|-------|
+| Primary (purpose-built extract) | NuExtract3 4B | `frob/nuextract-2.0:8b-q4_K_M` | 6.0 GB | ✓ | NuExtract 2.0 (built on Qwen2.5-VL). Only 8B on Ollama — no 4B. Community upload. |
+| Small vision | — | `qwen2.5vl:3b-q4_K_M` | 3.2 GB | ✓ | Official library. Smallest/cheapest candidate. |
+| Fallback (general VLM) | Qwen2.5-VL 7B | `qwen2.5vl:7b-q4_K_M` | 6.0 GB | ✓ | Official library. |
+| Fast text path | — | `nuextract` | ~2.2 GB | ✗ | NuExtract 1.x (Phi-3 3.8B). **Text-only — fails the vision check by design.** Use only for digital PDFs. |
+
+`scripts/pull_models.sh` re-verifies each tag against the live registry before pulling
+and prints what it resolved — treat the table above as the starting point, not gospel.
+
+## Setup (fresh Linux / WSL2 box)
+
+System packages need `sudo` (run yourself):
+
+```bash
+bash scripts/setup_env.sh        # installs Ollama + poppler-utils, prints next steps
+```
+
+Python environment (no sudo):
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+cp .env.example .env
+```
+
+Pull + verify models (Ollama must be running — `ollama serve`):
+
+```bash
+bash scripts/pull_models.sh
+```
+
+## Run
+
+```bash
+.venv/bin/uvicorn app.main:app --reload      # http://127.0.0.1:8000
+curl -s localhost:8000/health                # {"status":"ok",...}
+curl -s -F file=@invoice.pdf localhost:8000/extract | python -m json.tool
+```
+
+`/extract` returns the validated `Invoice` plus metadata: `path` taken (text|vision),
+`model` + resolved tag, `latency_s`, and a `consistency` flag.
+
+## Test & benchmark
+
+```bash
+.venv/bin/pytest                             # unit tests (postprocess, schema, scoring)
+.venv/bin/python scripts/bench.py            # per-model, per-field accuracy scorecard
+```
+
+Drop real labeled invoices in `tests/fixtures/` (PDF/image) with matching
+ground-truth JSON in `tests/labels/` (same stem, `.json`). Both dirs are
+gitignored — real invoices never get committed. `bench.py` is the **decision tool**:
+it shows which model gives the best accuracy/latency for your hardware.
+
+## Acceptance gates (per task)
+
+| Task | Gate |
+|------|------|
+| 0 scaffold | `uvicorn app.main:app` starts, `/health` → 200 ✓ |
+| 1 client+pull | both models pulled, `ollama list` shows them, trivial prompt returns |
+| 2 vision check | ≥1 model demonstrably reads pixels (Task 2 script) |
+| 3 text path | clean digital PDF → schema-valid JSON, no image sent |
+| 4 vision path | scanned/image invoice → schema-valid JSON via vision |
+| 5 postprocess | money fields are clean `Decimal`; consistency flag set |
+| 6 /extract | end-to-end curl returns documented response shape |
+| 7 bench | `scripts/bench.py` prints per-model, per-field scorecard |

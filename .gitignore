@@ -1,0 +1,41 @@
+# === Python (python/) ===
+__pycache__/
+*.py[cod]
+python/.venv/
+*.egg-info/
+.pytest_cache/
+
+# === Go (go/) ===
+# compiled binaries (we don't commit them)
+/go/server
+/go/bench
+/go/visioncheck
+/go/ie-server
+*.exe
+# Go workspace files
+go.work
+go.work.sum
+
+# === Env / secrets ===
+.env
+**/.env
+
+# === Real invoices + ground truth are private — never commit ===
+# (synthetic fixtures ARE kept so smoke tests/gates run out of the box)
+python/tests/fixtures/*
+python/tests/labels/*
+go/testdata/fixtures/*
+go/testdata/labels/*
+!**/.gitkeep
+!**/synthetic_*
+
+# === Run / bench artifacts ===
+bench_results/
+*.log
+
+# === Claude Code / local, not for the public repo ===
+.remember/
+.claude/
+CLAUDE.md
+specs/
+docs/STATUS.md

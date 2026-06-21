@@ -1,0 +1,31 @@
+{
+  "vendor_name": "PT Buah Segar Nusantara",
+  "vendor_tax_id": "01.234.567.8-901.000",
+  "invoice_number": "INV/2026/06/0042",
+  "invoice_date": "2026-06-21",
+  "due_date": "2026-07-21",
+  "currency": "IDR",
+  "line_items": [
+    {
+      "description": "Mangga Harum Manis",
+      "quantity": "100",
+      "unit_price": "25000",
+      "amount": "2500000"
+    },
+    {
+      "description": "Jeruk Medan",
+      "quantity": "50",
+      "unit_price": "18000",
+      "amount": "900000"
+    },
+    {
+      "description": "Apel Fuji",
+      "quantity": "40",
+      "unit_price": "30000",
+      "amount": "1200000"
+    }
+  ],
+  "subtotal": "4600000",
+  "tax_amount": "506000",
+  "total_amount": "5106000"
+}
