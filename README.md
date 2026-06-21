@@ -23,7 +23,7 @@ scripts/   setup_env.sh, pull_models.sh  (SHARED: Ollama + poppler, model pull)
 - **Ollama only**, **quantized GGUF only** (never FP16) — keeps VRAM low and runs on
   older GPUs where vLLM (needs compute 7.0+) won't.
 - Size models to your VRAM (the defaults fit ~6 GB). Verify tags before pulling
-  (`scripts/pull_models.sh`); every vision model must pass the Task 2 vision check.
+  (`scripts/pull_models.sh`); every vision model must pass the vision check.
 - Never fabricate: absent field → null/nil. Money uses `Decimal`, never float.
 
 ## Quick start (Linux / WSL2)
@@ -69,7 +69,7 @@ Absent fields come back `null` (never fabricated). A runnable sample lives at
 `python/tests/fixtures/synthetic_invoice.pdf` (+ ground truth in `tests/labels/`).
 
 ## Models (verified 2026-06-21)
-The specs named **"NuExtract3 4B"**, which **does not exist**. Resolved substitutions
+An earlier candidate, **"NuExtract3 4B"**, **does not exist**. Resolved substitutions
 (all Q4, sized for modest VRAM) are documented in each app's README. Live pipeline uses
 `qwen2.5vl:3b-q4_K_M` (text) and `qwen2.5vl:7b-q4_K_M` (vision);
 `frob/nuextract-2.0:8b-q4_K_M` is the purpose-built bench candidate.

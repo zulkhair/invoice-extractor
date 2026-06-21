@@ -1,5 +1,5 @@
 // Package postprocess coerces the lenient RawInvoice (strings) into the typed,
-// validated canonical Invoice (spec Task 5): locale number parsing, date parsing,
+// validated canonical Invoice: locale number parsing, date parsing,
 // and total reconciliation. We never trust the model's arithmetic or formatting.
 package postprocess
 

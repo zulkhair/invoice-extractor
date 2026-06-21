@@ -1,4 +1,4 @@
-// Package httpapi exposes /health and /extract (spec Task 6).
+// Package httpapi exposes /health and /extract.
 package httpapi
 
 import (

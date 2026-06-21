@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Write the synthetic invoice fixture (PDF + scan PNG + labels) into BOTH apps'
 test dirs, so the vision check and benchmark have something to run on without real
-invoices. Sharing one fixture keeps Python and Go benchmarks comparable (Go spec
-Section 10).
+invoices. Sharing one fixture keeps Python and Go benchmarks comparable.
 
     python scripts/make_synthetic_fixture.py
 """

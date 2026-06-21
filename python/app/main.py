@@ -1,4 +1,4 @@
-"""FastAPI service: /health and /extract (spec Task 6)."""
+"""FastAPI service: /health and /extract."""
 
 from __future__ import annotations
 

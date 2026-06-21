@@ -1,4 +1,4 @@
-// Command server runs the invoice-extractor HTTP API (spec Task 0/6).
+// Command server runs the invoice-extractor HTTP API.
 package main
 
 import (

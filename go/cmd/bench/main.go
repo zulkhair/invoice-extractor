@@ -1,5 +1,5 @@
 // Command bench runs every candidate model over the labeled fixtures and prints
-// a field-level accuracy scorecard + median latency (spec Task 7 — the decision tool).
+// a field-level accuracy scorecard + median latency (the decision tool).
 //
 //	go run ./cmd/bench
 //	go run ./cmd/bench -models qwen2.5vl:7b-q4_K_M

@@ -1,5 +1,5 @@
 // Package pipeline routes a document through the text-layer path or the vision
-// path, with fallback (spec Tasks 3 & 4).
+// path, with fallback.
 package pipeline
 
 import (

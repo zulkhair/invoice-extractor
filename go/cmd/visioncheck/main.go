@@ -1,4 +1,4 @@
-// Command visioncheck is the Task 2 vision sanity check (critical).
+// Command visioncheck is the vision sanity check (critical).
 //
 // It asks each candidate model to read the invoice number off a real image, and
 // off a different control image. A model that reads the real one correctly AND

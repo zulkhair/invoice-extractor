@@ -1,5 +1,5 @@
 // Package scoring computes field-level accuracy of a predicted Invoice against
-// ground truth (the bench harness core, spec Task 7).
+// ground truth (the benchmark harness core).
 package scoring
 
 import (

@@ -6,7 +6,7 @@ acceptance gates as the Python app — benchmarks are comparable across both.
 
 See the [root README](../README.md) for the shared constraints and verified model tags.
 
-## PDF backend decision (spec Task 1): **poppler shell-out**
+## PDF backend decision: **poppler shell-out**
 
 Chosen over `go-fitz` (CGo → MuPDF) to keep the build **pure-Go and trivially
 cross-compilable** — no C toolchain or MuPDF dev headers needed. Cost is a runtime
@@ -17,8 +17,8 @@ without touching callers.
 ## Layout
 ```
 cmd/server       HTTP entrypoint (/health, /extract)
-cmd/bench        Task 7 benchmark harness (per-model, per-field scorecard)
-cmd/visioncheck  Task 2 vision sanity check (two-image discriminator)
+cmd/bench        benchmark harness (per-model, per-field scorecard)
+cmd/visioncheck  vision sanity check (two-image discriminator)
 internal/
   schema         RawInvoice (wire, all strings) + Invoice (canonical, typed)
   postprocess    Raw -> canonical: locale numbers, dates, total reconciliation (TDD)
@@ -45,8 +45,8 @@ cp .env.example .env
 go build ./...                 # builds all packages + cmds
 go test ./...                  # postprocess + scoring (no GPU needed)
 go run ./cmd/server            # http://127.0.0.1:8000  -> GET /health
-go run ./cmd/visioncheck       # Task 2 (needs Ollama + a pulled vision model)
-go run ./cmd/bench             # Task 7 decision tool (needs models + fixtures)
+go run ./cmd/visioncheck       # vision check (needs Ollama + a pulled vision model)
+go run ./cmd/bench             # benchmark decision tool (needs models + fixtures)
 
 # end-to-end (needs Ollama running + models pulled + poppler installed):
 curl -s -F file=@testdata/fixtures/synthetic_invoice.pdf localhost:8000/extract | jq
@@ -59,5 +59,5 @@ python ../python/scripts/make_synthetic_fixture.py    # writes into go/testdata 
 
 ## Status (no GPU verified here)
 - `go build ./...` / `go vet ./...` clean; `go test ./...` green (postprocess, scoring).
-- `cmd/server` starts and `GET /health` → 200 (Task 0 gate).
-- GPU-gated gates (1–4, 6, 7) need Ollama + poppler installed and models pulled.
+- `cmd/server` starts and `GET /health` → 200 (health-check gate).
+- GPU-gated gates (PDF backend, routing, vision, extraction, benchmark) need Ollama + poppler installed and models pulled.

@@ -1,7 +1,7 @@
 """Build a synthetic Indonesian-style invoice fixture (digital PDF + rasterized
 'scan' PNG) plus matching ground-truth labels.
 
-Lets the text-path (Task 3) and vision-path (Task 4) gates run without real,
+Lets the text-path and vision-path gates run without real,
 private invoices. Real labeled invoices still drive the actual benchmark.
 """
 

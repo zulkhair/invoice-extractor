@@ -1,7 +1,7 @@
 // Package ollama wraps the official github.com/ollama/ollama/api client with a
 // small Chat surface (text + vision), plus introspection for health and the
 // pull-verification path. Kept thin so the wire details stay in one place — the
-// api package's field names have drifted across releases (spec Task 1 warning).
+// api package's field names have drifted across releases.
 package ollama
 
 import (

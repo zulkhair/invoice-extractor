@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Task 2 — vision sanity check (critical).
+"""Vision sanity check (critical).
 
 Feed each candidate model an actual invoice IMAGE and ask it to read a value off
 the page. A model that returns the right value AND returns a *different* value for

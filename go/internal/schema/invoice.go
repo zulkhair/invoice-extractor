@@ -1,4 +1,4 @@
-// Package schema defines the two-struct wire/canonical pattern (spec Section 5).
+// Package schema defines the two-struct wire/canonical pattern.
 //
 // RawInvoice is what the model emits: every numeric/date field is a *string so a
 // malformed value (e.g. "1.250.000,00" or "21 Juni 2026") never breaks the whole
@@ -67,7 +67,7 @@ var validate = validator.New()
 func (i *Invoice) Validate() error { return validate.Struct(i) }
 
 // HasRequiredish reports whether vendor, invoice number, and total are all
-// present. The text path falls back to vision when this is false (spec Task 4).
+// present. The text path falls back to vision when this is false.
 func (i *Invoice) HasRequiredish() bool {
 	return nonEmpty(i.VendorName) && nonEmpty(i.InvoiceNumber) && i.TotalAmount != nil
 }

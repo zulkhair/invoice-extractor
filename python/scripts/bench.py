@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Task 7 — benchmark harness (the decision tool).
+"""Benchmark harness (the decision tool).
 
 Runs every candidate model over the labeled fixtures and prints field-level
 accuracy (exact match per field, plus line-item precision/recall) and median
