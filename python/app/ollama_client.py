@@ -85,6 +85,14 @@ class OllamaClient:
         if images:
             user_msg["images"] = [_to_b64(img) for img in images]
 
+        options: dict = {
+            "temperature": config.LLM_TEMPERATURE if temperature is None else temperature
+        }
+        # Force GPU offload when configured — Ollama's auto-estimate under-offloads
+        # some vision models, leaving VRAM idle while spilling layers onto the CPU.
+        if config.OLLAMA_NUM_GPU is not None:
+            options["num_gpu"] = config.OLLAMA_NUM_GPU
+
         payload: dict = {
             "model": model,
             "messages": [
@@ -92,10 +100,10 @@ class OllamaClient:
                 user_msg,
             ],
             "stream": False,
-            "options": {
-                "temperature": config.LLM_TEMPERATURE if temperature is None else temperature
-            },
+            "options": options,
         }
+        if config.OLLAMA_KEEP_ALIVE:
+            payload["keep_alive"] = config.OLLAMA_KEEP_ALIVE
         if json_format is True:
             payload["format"] = "json"
         elif isinstance(json_format, dict):

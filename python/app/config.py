@@ -40,6 +40,15 @@ def _get(key: str, default: str) -> str:
 # --- Ollama ---
 OLLAMA_HOST = _get("OLLAMA_HOST", "http://127.0.0.1:11434")
 OLLAMA_TIMEOUT_S = float(_get("OLLAMA_TIMEOUT_S", "180"))
+# Force N model layers onto the GPU (Ollama `num_gpu`). Ollama's auto-estimate can
+# under-offload vision models — leaving VRAM idle while spilling layers to CPU. Set
+# to the layer count or a large value (e.g. 99) to force full-GPU. Empty/None = let
+# Ollama decide (the safe default for unknown GPUs).
+_num_gpu_raw = _get("OLLAMA_NUM_GPU", "").strip()
+OLLAMA_NUM_GPU = int(_num_gpu_raw) if _num_gpu_raw.lstrip("-").isdigit() else None
+# Keep the model resident after a request: "30m", "-1" (forever), or empty (Ollama
+# default ~5m). Staying warm avoids re-paying the one-time first-load vision warmup.
+OLLAMA_KEEP_ALIVE = _get("OLLAMA_KEEP_ALIVE", "").strip()
 
 # --- Models (see README for verified tags / substitutions) ---
 # Candidate pool (purpose-built + general VLMs), all Q4, all vision-capable:
