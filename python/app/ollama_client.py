@@ -86,7 +86,8 @@ class OllamaClient:
             user_msg["images"] = [_to_b64(img) for img in images]
 
         options: dict = {
-            "temperature": config.LLM_TEMPERATURE if temperature is None else temperature
+            "temperature": config.LLM_TEMPERATURE if temperature is None else temperature,
+            "num_ctx": config.OLLAMA_NUM_CTX,  # room for image + prompt + full JSON output
         }
         # Force GPU offload when configured — Ollama's auto-estimate under-offloads
         # some vision models, leaving VRAM idle while spilling layers onto the CPU.

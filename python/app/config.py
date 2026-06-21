@@ -49,6 +49,10 @@ OLLAMA_NUM_GPU = int(_num_gpu_raw) if _num_gpu_raw.lstrip("-").isdigit() else No
 # Keep the model resident after a request: "30m", "-1" (forever), or empty (Ollama
 # default ~5m). Staying warm avoids re-paying the one-time first-load vision warmup.
 OLLAMA_KEEP_ALIVE = _get("OLLAMA_KEEP_ALIVE", "").strip()
+# Context window (Ollama `num_ctx`). The default 4096 is too small for the vision
+# path: a rasterized page is ~2k+ image tokens, plus the prompt, leaving no room for
+# the JSON output -> it gets truncated mid-object. 8192 fits image + prompt + output.
+OLLAMA_NUM_CTX = int(_get("OLLAMA_NUM_CTX", "8192"))
 
 # --- Models (see README for verified tags / substitutions) ---
 # Candidate pool (purpose-built + general VLMs), all Q4, all vision-capable:
