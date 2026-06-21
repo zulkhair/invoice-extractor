@@ -44,6 +44,30 @@ cd go && cp .env.example .env && go test ./... && go run ./cmd/server
 Both expose `GET /health` and `POST /extract` (multipart file upload) and return the
 validated invoice plus metadata (path taken, model + tag, latency, consistency flag).
 
+## Example
+`POST /extract` with an invoice file returns:
+```json
+{
+  "invoice": {
+    "vendor_name": "PT Buah Segar Nusantara",
+    "vendor_tax_id": "01.234.567.8-901.000",
+    "invoice_number": "INV/2026/06/0042",
+    "invoice_date": "2026-06-21",
+    "due_date": "2026-07-21",
+    "currency": "IDR",
+    "line_items": [
+      {"description": "Mangga Harum Manis", "quantity": "100", "unit_price": "25000", "amount": "2500000"}
+    ],
+    "subtotal": "4600000",
+    "tax_amount": "506000",
+    "total_amount": "5106000"
+  },
+  "metadata": {"path": "vision", "model": "qwen2.5vl:7b-q4_K_M", "latency_s": 8.2, "consistent": true}
+}
+```
+Absent fields come back `null` (never fabricated). A runnable sample lives at
+`python/tests/fixtures/synthetic_invoice.pdf` (+ ground truth in `tests/labels/`).
+
 ## Models (verified 2026-06-21)
 The specs named **"NuExtract3 4B"**, which **does not exist**. Resolved substitutions
 (all Q4, sized for modest VRAM) are documented in each app's README. Live pipeline uses
