@@ -45,8 +45,8 @@ cat <<'EOF'
 
 ==> Next steps
   Shared:
-    bash scripts/pull_models.sh                 # verify + pull models (Task 1)
-    python/.venv/bin/python python/scripts/make_synthetic_fixture.py   # writes fixtures to BOTH apps
+    bash scripts/pull_models.sh        # verify + pull the models
+    python/.venv/bin/python python/scripts/make_synthetic_fixture.py   # optional: generate a sample invoice to test with
 
   Python app (python/):
     cd python
@@ -56,13 +56,13 @@ cat <<'EOF'
     #   curl -fsSL https://bootstrap.pypa.io/get-pip.py | .venv/bin/python -
     #   .venv/bin/pip install -e ".[dev]"
     cp .env.example .env
-    .venv/bin/uvicorn app.main:app --reload     # /health, /extract
-    .venv/bin/python scripts/vision_check.py     # Task 2
+    .venv/bin/uvicorn app.main:app --reload      # serve /health and /extract
+    .venv/bin/python scripts/vision_check.py     # check a model can read invoice images
 
   Go app (go/):
     cd go
     cp .env.example .env
-    go run ./cmd/server                          # /health, /extract
-    go run ./cmd/visioncheck                      # Task 2
-    go run ./cmd/bench                             # Task 7
+    go run ./cmd/server          # serve /health and /extract
+    go run ./cmd/visioncheck     # check a model can read invoice images
+    go run ./cmd/bench           # score models on your invoices
 EOF
