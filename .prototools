@@ -1,0 +1,9 @@
+# proto toolchain pins for invoice-extractor — https://moonrepo.dev/proto
+# Run `proto install` (no args) from the repo root to install everything below.
+#
+# go: matches go/go.mod exactly. The official ollama/ollama/api client forces
+#     go 1.26 (the documented "Go forkability tax"); keep these in lockstep.
+# python: project standard is 3.12. This provides the interpreter; create the
+#     app venv from it, e.g.  python -m venv python/.venv
+go = "1.26.0"
+python = "~3.12"
