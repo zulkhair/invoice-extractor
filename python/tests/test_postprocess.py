@@ -10,6 +10,7 @@ from decimal import Decimal
 import pytest
 
 from app.postprocess import (
+    categorize_by_vendor,
     normalize_raw,
     parse_category,
     parse_decimal,
@@ -95,6 +96,35 @@ def test_parse_category_canonicalizes(raw, expected):
 
 def test_normalize_raw_coerces_category():
     out = normalize_raw({"category": "Shopping"})
+    assert out["category"] == "shopping"
+
+
+@pytest.mark.parametrize(
+    "vendor,expected",
+    [
+        ("ALFAMART STA.KARET", "groceries"),
+        ("PT INDOMARCO PRISMATAMA", "groceries"),   # legal-entity name still matches
+        ("PT. Sumber Alfaria Trijaya, Tbk", "groceries"),
+        ("Indomaret Cidatar", "groceries"),
+        ("Lilac Beauty and Dental Clinic", "medical"),
+        ("Warung Pasta @ Kemang", "dining"),
+        ("SPBU Pertamina 34.567", "transport"),
+        ("Toko Buku Gramedia", None),   # no rule -> None (fall back to model)
+        (None, None),
+    ],
+)
+def test_categorize_by_vendor(vendor, expected):
+    assert categorize_by_vendor(vendor) == expected
+
+
+def test_vendor_rule_overrides_model_category():
+    # Model guessed "shopping" for a minimarket; the vendor rule corrects it.
+    out = normalize_raw({"vendor_name": "Indomaret Cidatar", "category": "shopping"})
+    assert out["category"] == "groceries"
+
+
+def test_model_category_kept_when_no_vendor_rule():
+    out = normalize_raw({"vendor_name": "Toko Buku Gramedia", "category": "shopping"})
     assert out["category"] == "shopping"
 
 

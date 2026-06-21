@@ -132,6 +132,37 @@ def parse_category(value) -> str | None:
     return s if s in CATEGORIES else "other"
 
 
+# Vendor-keyword -> category. A deterministic rule is far more reliable than the
+# small model for known Indonesian chains/keywords (the model insists Alfamart is
+# "shopping", etc.), so a match here overrides the model's guess. First match wins;
+# extend the keyword lists for your own vendors.
+_VENDOR_CATEGORY_RULES = (
+    ("medical", ("apotek", "apotik", "pharma", "farma", "klinik", "clinic", "hospital",
+                 "rumah sakit", "dental", "dokter", "medika", "optik")),
+    ("groceries", ("alfamart", "alfaria", "alfamidi", "indomaret", "indomarco",
+                   "supermarket", "minimarket", "superindo", "hypermart", "transmart",
+                   "giant", "lawson", "circle k", "familymart", "grosir", "swalayan")),
+    ("dining", ("resto", "restaurant", "rumah makan", "warung", "warteg", "cafe", "kafe",
+                "coffee", "kopi", "kedai", "bakery", "pizza", "kfc", "mcdonald", "burger",
+                "bakso", "kitchen")),
+    ("transport", ("pertamina", "spbu", "gojek", "grab", "parkir", "parking",
+                   "transjakarta", "kereta", "krl", "bensin")),
+    ("utilities", ("pln", "telkom", "indihome", "pdam", "biznet", "listrik", "pulsa")),
+)
+
+
+def categorize_by_vendor(vendor_name) -> str | None:
+    """Best-effort category from the vendor name via keyword rules; None if no
+    rule fires (caller then falls back to the model's own category guess)."""
+    if not vendor_name:
+        return None
+    low = str(vendor_name).lower()
+    for category, keywords in _VENDOR_CATEGORY_RULES:
+        if any(kw in low for kw in keywords):
+            return category
+    return None
+
+
 # --- raw normalization -----------------------------------------------------
 
 _MONEY_FIELDS = ("subtotal", "tax_amount", "total_amount")
@@ -152,8 +183,11 @@ def normalize_raw(raw: dict) -> dict:
     for f in _DATE_FIELDS:
         if f in out:
             out[f] = parse_invoice_date(out[f])
-    if "category" in out:
-        out["category"] = parse_category(out["category"])
+    # Category: the vendor-keyword rule overrides the model's guess when it fires
+    # (reliable for known chains); otherwise keep the model's canonicalized category.
+    out["category"] = (
+        categorize_by_vendor(out.get("vendor_name")) or parse_category(out.get("category"))
+    )
     items = out.get("line_items")
     if isinstance(items, list):
         norm_items = []
