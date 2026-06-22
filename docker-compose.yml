@@ -27,4 +27,7 @@ services:
     extra_hosts:
       # Lets host.docker.internal resolve on Linux (automatic on Docker Desktop Win/macOS).
       - "host.docker.internal:host-gateway"
+    volumes:
+      # Serve the live UI file so frontend edits don't need an image rebuild.
+      - ./python/web:/srv/web:ro
     restart: unless-stopped
