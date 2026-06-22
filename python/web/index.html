@@ -3,121 +3,211 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Invoice / Receipt Extractor</title>
+<title>Receipts — turn a photo into an expense</title>
+<script>
+  // Set theme before paint to avoid a flash.
+  (function () {
+    var t = localStorage.getItem("theme")
+      || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    document.documentElement.setAttribute("data-theme", t);
+  })();
+</script>
 <style>
   :root {
-    --bg: #0f1115; --panel: #181b22; --panel2: #1f232c; --line: #2a2f3a;
-    --text: #e6e9ef; --muted: #9aa3b2; --accent: #5b8cff; --good: #3ecf8e;
-    --bad: #ff6b6b; --warn: #f5a623;
+    --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+    /* dark = warm ink */
+    --page: #16130f; --surface: #1e1a14; --ink: #ece5d6; --ink-dim: #b7af9e;
+    --muted: #8b8373; --hair: #342f25; --hair-2: #4a4336;
+    --accent: #8b97ff; --accent-ink: #0a0c18; --good: #74d39a; --bad: #ff9b94;
+    --shadow: 0 18px 40px -18px rgba(0,0,0,.6);
+  }
+  :root[data-theme="light"] {
+    /* light = manila page + receipt paper */
+    --page: #e7e0cf; --surface: #fbf9f2; --ink: #2a251c; --ink-dim: #5b5446;
+    --muted: #8a8273; --hair: #e4dcc9; --hair-2: #d0c7b1;
+    --accent: #3a4fe0; --accent-ink: #ffffff; --good: #2f9e63; --bad: #c23a34;
+    --shadow: 0 16px 34px -20px rgba(60,48,24,.35);
   }
   * { box-sizing: border-box; }
-  [hidden] { display: none !important; }   /* beat .row/.card display rules */
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
   body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin: 0; background: var(--page); color: var(--ink); font: 15px/1.55 var(--font-ui);
+    -webkit-font-smoothing: antialiased;
   }
+
   header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 16px 24px; border-bottom: 1px solid var(--line); background: var(--panel);
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    max-width: 600px; margin: 0 auto; padding: 22px 20px 6px;
   }
-  header h1 { font-size: 18px; margin: 0; font-weight: 600; }
-  header .sub { color: var(--muted); font-size: 13px; }
-  .badge { font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
-  .badge.up { color: var(--good); border-color: #244c3b; background: #11261d; }
-  .badge.down { color: var(--bad); border-color: #4c2424; background: #261111; }
-  main { max-width: 880px; margin: 0 auto; padding: 24px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+  .brand h1 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: -.01em; }
+  .brand p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .tools { display: flex; align-items: center; gap: 8px; }
+  .status { display: inline-flex; align-items: center; gap: 7px; font: 12px var(--font-mono);
+    color: var(--muted); padding: 5px 10px; border: 1px solid var(--hair); border-radius: 999px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+  .status.up .dot { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 22%, transparent); }
+  .status.down .dot { background: var(--bad); }
+  .iconbtn {
+    width: 34px; height: 34px; display: grid; place-items: center; cursor: pointer;
+    background: transparent; color: var(--ink-dim); border: 1px solid var(--hair);
+    border-radius: 9px; font-size: 15px; line-height: 1;
+  }
+  .iconbtn:hover { color: var(--ink); border-color: var(--hair-2); }
+
+  main { max-width: 600px; margin: 0 auto; padding: 14px 20px 56px; }
+
+  /* --- uploader (the "scanner") --- */
+  .panel { background: var(--surface); border: 1px solid var(--hair); border-radius: 14px;
+    padding: 18px; box-shadow: var(--shadow); }
   .drop {
-    border: 1.5px dashed var(--line); border-radius: 12px; padding: 32px; text-align: center;
-    cursor: pointer; transition: border-color .15s, background .15s;
+    border: 1.5px dashed var(--hair-2); border-radius: 11px; padding: 30px 18px; text-align: center;
+    cursor: pointer; transition: border-color .15s, background .15s, transform .05s;
   }
-  .drop:hover, .drop.over { border-color: var(--accent); background: #161a24; }
-  .drop strong { color: var(--text); }
-  .drop .hint { color: var(--muted); font-size: 13px; margin-top: 6px; }
-  .row { display: flex; gap: 12px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
-  button {
-    background: var(--accent); color: #fff; border: 0; border-radius: 8px;
-    padding: 10px 18px; font-size: 14px; font-weight: 600; cursor: pointer;
+  .drop:hover, .drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+  .drop:active { transform: scale(.997); }
+  .drop .big { font-size: 15px; font-weight: 600; }
+  .drop .big b { color: var(--accent); }
+  .drop .fmt { margin-top: 7px; font: 12px var(--font-mono); color: var(--muted); letter-spacing: .02em; }
+  .controls { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+  .btn {
+    background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 9px;
+    padding: 11px 20px; font-size: 14px; font-weight: 650; cursor: pointer; transition: filter .15s, transform .05s;
   }
-  button:disabled { opacity: .5; cursor: not-allowed; }
-  .fname { color: var(--muted); font-size: 13px; }
-  .spinner { width: 16px; height: 16px; border: 2px solid #3a4150; border-top-color: var(--accent);
-    border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; vertical-align: -3px; }
+  .btn:hover:not(:disabled) { filter: brightness(1.06); }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .fname { color: var(--muted); font: 13px var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .status-line { margin-top: 14px; font-size: 13.5px; color: var(--ink-dim); display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+  .status-line .hint { color: var(--muted); font-size: 12.5px; }
+  .status-line.err { color: var(--bad); }
+  .spinner { width: 15px; height: 15px; border: 2px solid var(--hair-2); border-top-color: var(--accent);
+    border-radius: 50%; animation: spin .7s linear infinite; flex: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .note { color: var(--muted); font-size: 13px; }
-  .err { color: var(--bad); }
-  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-  .chip { font-size: 12px; padding: 5px 11px; border-radius: 999px; background: var(--panel2); border: 1px solid var(--line); color: var(--muted); }
-  .chip b { color: var(--text); font-weight: 600; }
-  .chip.good { color: var(--good); border-color: #244c3b; }
-  .chip.bad { color: var(--bad); border-color: #4c2424; }
-  .chip.cat { color: var(--accent); border-color: #2a3a66; background:#141a2b; text-transform: capitalize; }
-  .summary { display: grid; grid-template-columns: 1fr auto; gap: 4px 24px; align-items: baseline; }
-  .vendor { font-size: 20px; font-weight: 600; }
-  .total { font-size: 24px; font-weight: 700; text-align: right; }
-  .meta-line { color: var(--muted); font-size: 13px; }
-  table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
-  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  details { margin-top: 8px; }
-  summary { cursor: pointer; color: var(--muted); font-size: 13px; }
-  pre { background: #0b0d11; border: 1px solid var(--line); border-radius: 8px; padding: 14px;
-    overflow: auto; font: 12.5px/1.5 ui-monospace, "SF Mono", Menlo, monospace; color: #cdd3df; }
-  .copy { background: var(--panel2); color: var(--muted); padding: 4px 10px; font-size: 12px; font-weight: 500; }
+
+  /* --- result rendered as a torn receipt --- */
+  .receipt {
+    position: relative; margin-top: 22px; background: var(--surface); color: var(--ink);
+    padding: 24px 22px 26px; box-shadow: var(--shadow);
+    animation: print .5s ease-out;
+  }
+  @keyframes print { from { clip-path: inset(0 0 100% 0); opacity: .3; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
+  /* torn bottom edge: page-colored teeth cut into the receipt */
+  .receipt::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 9px;
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--page) 50%),
+      linear-gradient(-45deg, transparent 50%, var(--page) 50%);
+    background-size: 11px 9px; background-repeat: repeat-x; background-position: 0 100%;
+  }
+  .r-head { text-align: center; position: relative; }
+  .vendor { font: 600 18px/1.3 var(--font-mono); letter-spacing: .01em; word-break: break-word; }
+  .r-meta { margin-top: 6px; font: 12.5px var(--font-mono); color: var(--muted); }
+  .stamp {
+    display: inline-block; margin-top: 12px; padding: 4px 12px; transform: rotate(-2deg);
+    font: 600 11px var(--font-mono); text-transform: uppercase; letter-spacing: .14em;
+    color: var(--accent); border: 1.5px solid color-mix(in srgb, var(--accent) 55%, transparent);
+    border-radius: 5px; background: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+  .rule { height: 0; border-top: 1.5px solid var(--hair-2); margin: 16px 0; }
+  .rule.dashed { border-top-style: dashed; border-color: var(--hair); }
+  .lines { font: 13.5px/1.7 var(--font-mono); }
+  .line { display: flex; gap: 14px; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed var(--hair); }
+  .line:last-child { border-bottom: 0; }
+  .li-name { color: var(--ink); word-break: break-word; }
+  .li-amt { color: var(--ink-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .empty-line { font: 13px var(--font-mono); color: var(--muted); padding: 6px 0; }
+  .totalrow { display: flex; justify-content: space-between; align-items: baseline; }
+  .t-label { font: 600 12px var(--font-mono); letter-spacing: .18em; color: var(--muted); }
+  .t-amt { font: 700 24px var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .r-foot { font: 11.5px var(--font-mono); color: var(--muted); text-align: center; }
+
+  details { margin-top: 16px; }
+  summary { cursor: pointer; font: 12px var(--font-mono); color: var(--muted); list-style: none; }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: "▸ "; }
+  details[open] summary::before { content: "▾ "; }
+  .json-tools { display: flex; justify-content: flex-end; margin: 8px 0; }
+  .copy { background: transparent; color: var(--muted); border: 1px solid var(--hair); border-radius: 7px;
+    padding: 4px 11px; font: 12px var(--font-ui); cursor: pointer; }
+  .copy:hover { color: var(--ink); border-color: var(--hair-2); }
+  pre { margin: 0; background: var(--page); border: 1px solid var(--hair); border-radius: 8px;
+    padding: 13px; overflow: auto; font: 12.5px/1.55 var(--font-mono); color: var(--ink-dim); }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (max-width: 480px) {
+    header { flex-wrap: wrap; }
+    .t-amt { font-size: 21px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .receipt { animation: none; }
+    .spinner { animation-duration: 0s; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <div>
-    <h1>Invoice / Receipt Extractor</h1>
-    <div class="sub">Upload a receipt or invoice → structured JSON</div>
+  <div class="brand">
+    <h1>Receipts</h1>
+    <p>Turn a receipt photo into a structured expense.</p>
   </div>
-  <span id="health" class="badge">checking…</span>
+  <div class="tools">
+    <span id="health" class="status"><span class="dot"></span>checking…</span>
+    <button id="theme" class="iconbtn" aria-label="Toggle theme">☾</button>
+  </div>
 </header>
 
 <main>
-  <div class="card">
-    <div id="drop" class="drop">
-      <strong>Drop a file here</strong> or click to choose
-      <div class="hint">PDF, JPG, PNG, WEBP, TIFF</div>
+  <div class="panel">
+    <div id="drop" class="drop" role="button" tabindex="0" aria-label="Choose a receipt file">
+      <div class="big"><b>Drop a receipt</b> or click to choose</div>
+      <div class="fmt">JPG · PNG · PDF · WEBP · TIFF</div>
       <input id="file" type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.tif,.tiff,image/*,application/pdf" hidden />
     </div>
-    <div class="row">
-      <button id="go" disabled>Extract</button>
-      <span id="fname" class="fname">No file selected</span>
+    <div class="controls">
+      <button id="go" class="btn" disabled>Extract</button>
+      <span id="fname" class="fname">No file chosen</span>
     </div>
-    <div id="status" class="row note" hidden></div>
+    <div id="status" class="status-line" hidden></div>
   </div>
 
-  <div id="result" class="card" hidden></div>
+  <div id="result" class="receipt" hidden></div>
 </main>
 
 <script>
 const $ = (id) => document.getElementById(id);
-const drop = $("drop"), fileInput = $("file"), go = $("go");
-let file = null;
+const root = document.documentElement;
 
-// --- health badge ---
+// --- theme ---
+const themeBtn = $("theme");
+function setTheme(t) {
+  root.setAttribute("data-theme", t);
+  localStorage.setItem("theme", t);
+  themeBtn.textContent = t === "dark" ? "☾" : "☀";
+  themeBtn.setAttribute("aria-label", t === "dark" ? "Switch to light theme" : "Switch to dark theme");
+}
+setTheme(root.getAttribute("data-theme") || "dark");
+themeBtn.onclick = () => setTheme(root.getAttribute("data-theme") === "dark" ? "light" : "dark");
+
+// --- health ---
 fetch("/health").then(r => r.json()).then(h => {
-  const b = $("health");
-  const up = h.ollama === "up";
-  b.className = "badge " + (up ? "up" : "down");
-  b.textContent = up ? `Ollama up · ${h.vision_path_model}` : "Ollama down";
-}).catch(() => { $("health").className = "badge down"; $("health").textContent = "backend error"; });
+  const b = $("health"), up = h.ollama === "up";
+  b.className = "status " + (up ? "up" : "down");
+  b.innerHTML = `<span class="dot"></span>${up ? "Ready · " + esc(h.vision_path_model) : "Engine offline"}`;
+}).catch(() => { $("health").className = "status down"; $("health").innerHTML = `<span class="dot"></span>Backend error`; });
 
 // --- file selection ---
+const drop = $("drop"), fileInput = $("file"), go = $("go");
+let file = null;
 drop.onclick = () => fileInput.click();
+drop.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); } };
 fileInput.onchange = () => setFile(fileInput.files[0]);
 ["dragover", "dragenter"].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add("over"); }));
 ["dragleave", "drop"].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove("over"); }));
 drop.addEventListener("drop", ev => { if (ev.dataTransfer.files[0]) setFile(ev.dataTransfer.files[0]); });
-
-function setFile(f) {
-  file = f || null;
-  $("fname").textContent = file ? file.name : "No file selected";
-  go.disabled = !file;
-}
+function setFile(f) { file = f || null; $("fname").textContent = file ? file.name : "No file chosen"; go.disabled = !file; }
 
 // --- extract ---
 go.onclick = async () => {
@@ -125,37 +215,37 @@ go.onclick = async () => {
   go.disabled = true;
   $("result").hidden = true;
   const status = $("status");
-  status.hidden = false;
+  status.hidden = false; status.className = "status-line";
   const t0 = performance.now();
-  let timer = setInterval(() => {
-    status.innerHTML = `<span class="spinner"></span> Extracting… ${((performance.now()-t0)/1000).toFixed(0)}s ` +
-      `<span class="note">(first run can take a few minutes — the model warms up)</span>`;
+  const timer = setInterval(() => {
+    status.innerHTML = `<span class="spinner"></span> Reading the receipt… ${((performance.now()-t0)/1000).toFixed(0)}s `
+      + `<span class="hint">first run warms the model up (a minute or two)</span>`;
   }, 200);
 
   try {
-    const fd = new FormData();
-    fd.append("file", file);
+    const fd = new FormData(); fd.append("file", file);
     const res = await fetch("/extract", { method: "POST", body: fd });
     clearInterval(timer);
     const elapsed = ((performance.now()-t0)/1000).toFixed(1);
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      status.innerHTML = `<span class="err">Error: ${body.detail || res.statusText}</span>`;
+      status.className = "status-line err";
+      status.innerHTML = `Couldn't read that receipt — ${esc(body.detail || res.statusText)}`;
     } else {
-      status.innerHTML = "";
-      status.hidden = true;
+      status.hidden = true; status.innerHTML = "";
       render(body, elapsed);
     }
   } catch (e) {
     clearInterval(timer);
-    status.innerHTML = `<span class="err">Request failed: ${e.message}</span>`;
+    status.className = "status-line err";
+    status.innerHTML = `Request failed — ${esc(e.message)}`;
   } finally {
     go.disabled = false;
   }
 };
 
-// --- render result ---
-const esc = (s) => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+// --- helpers ---
+function esc(s) { return String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c])); }
 const dash = (v) => (v === null || v === undefined || v === "") ? "—" : v;
 function money(v, cur) {
   if (v === null || v === undefined || v === "") return "—";
@@ -165,44 +255,45 @@ function money(v, cur) {
 }
 function dt(v) { return v ? String(v).replace("T", " ").replace(/\.\d+$/, "") : "—"; }
 
+// --- render the receipt ---
 function render(data, elapsed) {
   const inv = data.invoice || {}, m = data.metadata || {};
   const items = inv.line_items || [];
+  const meta = [dt(inv.transaction_datetime), inv.currency ? esc(inv.currency) : null].filter(Boolean).join(" · ");
 
-  const chips = [
-    `<span class="chip"><b>${esc(m.path || "?")}</b> path</span>`,
-    `<span class="chip">${esc(m.model || "?")}</span>`,
-    `<span class="chip">${esc(m.latency_s ?? elapsed)}s</span>`,
-    inv.category ? `<span class="chip cat">${esc(inv.category)}</span>` : "",
-    m.fell_back ? `<span class="chip warn">fell back to vision</span>` : "",
-  ].filter(Boolean).join("");
+  const lines = items.map(li => `
+    <div class="line"><span class="li-name">${esc(dash(li.description))}</span><span class="li-amt">${money(li.amount, inv.currency)}</span></div>
+  `).join("") || `<div class="empty-line">No line items read</div>`;
 
-  const rows = items.map(li => `
-    <tr>
-      <td>${esc(dash(li.description))}</td>
-      <td class="num">${money(li.amount, inv.currency)}</td>
-    </tr>`).join("") || `<tr><td colspan="2" class="note">No line items</td></tr>`;
+  const foot = [
+    m.path ? `via ${esc(m.path)}` : null,
+    m.model ? esc(m.model) : null,
+    `${esc(m.latency_s ?? elapsed)}s`,
+    m.fell_back ? "fell back to vision" : null,
+  ].filter(Boolean).join(" · ");
 
-  $("result").hidden = false;
-  $("result").innerHTML = `
-    <div class="chips">${chips}</div>
-    <div class="summary">
+  const el = $("result");
+  el.hidden = false;
+  el.innerHTML = `
+    <div class="r-head">
       <div class="vendor">${esc(dash(inv.vendor_name))}</div>
-      <div class="total">${money(inv.total_amount, inv.currency)}</div>
-      <div class="meta-line">${dt(inv.transaction_datetime)}</div>
-      <div class="meta-line">${esc(dash(inv.currency))} · total = sum of ${items.length} item${items.length === 1 ? "" : "s"}</div>
+      <div class="r-meta">${meta || "—"}</div>
+      ${inv.category ? `<div><span class="stamp">${esc(inv.category)}</span></div>` : ""}
     </div>
-    <table>
-      <thead><tr><th>Item</th><th class="num">Price</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
+    <div class="rule dashed"></div>
+    <div class="lines">${lines}</div>
+    <div class="rule"></div>
+    <div class="totalrow"><span class="t-label">TOTAL</span><span class="t-amt">${money(inv.total_amount, inv.currency)}</span></div>
+    <div class="rule dashed"></div>
+    <div class="r-foot">${foot}</div>
     <details>
       <summary>Raw JSON</summary>
-      <div class="row"><button class="copy" id="copy">Copy</button></div>
+      <div class="json-tools"><button class="copy" id="copy">Copy</button></div>
       <pre id="raw">${esc(JSON.stringify(data, null, 2))}</pre>
     </details>`;
 
   $("copy").onclick = () => navigator.clipboard.writeText(JSON.stringify(data, null, 2));
+  el.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 </script>
 </body>
