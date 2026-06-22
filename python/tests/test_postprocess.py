@@ -1,10 +1,11 @@
-"""Tests for postprocessing: locale number parsing, date parsing, total reconciliation.
+"""Tests for postprocessing: locale number parsing, datetime parsing, category
+assignment, and computing the total by summing line item prices.
 
-These are the model-independent guarantees: we never trust the
-model's arithmetic or number formatting — we re-parse and re-check here.
+These are the model-independent guarantees: we never trust the model's number
+formatting or its grand total — we re-parse and re-sum here.
 """
 
-from datetime import date
+from datetime import datetime
 from decimal import Decimal
 
 import pytest
@@ -13,11 +14,10 @@ from app.postprocess import (
     categorize_by_vendor,
     normalize_raw,
     parse_category,
+    parse_datetime,
     parse_decimal,
-    parse_invoice_date,
-    reconcile_totals,
 )
-from app.schema import Invoice, LineItem
+from app.schema import Invoice
 
 
 # --- parse_decimal ---------------------------------------------------------
@@ -31,9 +31,9 @@ from app.schema import Invoice, LineItem
         ("1.250.000", Decimal("1250000")),         # European thousands, no decimals
         ("Rp 1.250.000", Decimal("1250000")),      # currency prefix + grouping
         ("$1,234.56", Decimal("1234.56")),         # symbol + US
-        ("12,50", Decimal("12.50")),               # decimal comma, no grouping
-        ("12.50", Decimal("12.50")),               # decimal dot, no grouping
-        ("-50,00", Decimal("-50.00")),             # negative (credit line)
+        ("12,50", Decimal("12.50")),               # decimal comma
+        ("12.50", Decimal("12.50")),               # decimal dot
+        ("-50,00", Decimal("-50.00")),             # negative
         ("  7 ", Decimal("7")),                    # whitespace
     ],
 )
@@ -51,33 +51,33 @@ def test_parse_decimal_passthrough_numeric_types():
     assert parse_decimal(Decimal("5.5")) == Decimal("5.5")
 
 
-# --- parse_invoice_date ----------------------------------------------------
+# --- parse_datetime --------------------------------------------------------
 
 @pytest.mark.parametrize(
     "raw,expected",
     [
-        ("21/06/2026", date(2026, 6, 21)),    # dayfirst (Indonesian convention)
-        ("21-06-2026", date(2026, 6, 21)),
-        ("2026-06-21", date(2026, 6, 21)),    # ISO
-        ("21 Jun 2026", date(2026, 6, 21)),   # English abbrev
-        ("21 Juni 2026", date(2026, 6, 21)),  # Indonesian month name
-        ("21 Agustus 2025", date(2025, 8, 21)),
+        ("19-05-2017 06:51:42", datetime(2017, 5, 19, 6, 51, 42)),  # dayfirst + time
+        ("20 Mar 2015 08:20", datetime(2015, 3, 20, 8, 20)),
+        ("16-11-15 16:04:52", datetime(2015, 11, 16, 16, 4, 52)),
+        ("21/06/2026", datetime(2026, 6, 21, 0, 0)),                # date only -> midnight
+        ("21 Juni 2026 14:30", datetime(2026, 6, 21, 14, 30)),      # Indonesian month
     ],
 )
-def test_parse_invoice_date_formats(raw, expected):
-    assert parse_invoice_date(raw) == expected
+def test_parse_datetime_formats(raw, expected):
+    assert parse_datetime(raw) == expected
 
 
-@pytest.mark.parametrize("raw", [None, "", "not a date", "99/99/9999"])
-def test_parse_invoice_date_unparseable_is_none(raw):
-    assert parse_invoice_date(raw) is None
+@pytest.mark.parametrize("raw", [None, "", "not a date"])
+def test_parse_datetime_unparseable_is_none(raw):
+    assert parse_datetime(raw) is None
 
 
-def test_parse_invoice_date_passthrough_date():
-    assert parse_invoice_date(date(2026, 6, 21)) == date(2026, 6, 21)
+def test_parse_datetime_passthrough():
+    dt = datetime(2026, 6, 21, 9, 0)
+    assert parse_datetime(dt) == dt
 
 
-# --- parse_category --------------------------------------------------------
+# --- category --------------------------------------------------------------
 
 @pytest.mark.parametrize(
     "raw,expected",
@@ -94,22 +94,17 @@ def test_parse_category_canonicalizes(raw, expected):
     assert parse_category(raw) == expected
 
 
-def test_normalize_raw_coerces_category():
-    out = normalize_raw({"category": "Shopping"})
-    assert out["category"] == "shopping"
-
-
 @pytest.mark.parametrize(
     "vendor,expected",
     [
         ("ALFAMART STA.KARET", "groceries"),
-        ("PT INDOMARCO PRISMATAMA", "groceries"),   # legal-entity name still matches
+        ("PT INDOMARCO PRISMATAMA", "groceries"),       # legal-entity name matches
         ("PT. Sumber Alfaria Trijaya, Tbk", "groceries"),
         ("Indomaret Cidatar", "groceries"),
         ("Lilac Beauty and Dental Clinic", "medical"),
         ("Warung Pasta @ Kemang", "dining"),
         ("SPBU Pertamina 34.567", "transport"),
-        ("Toko Buku Gramedia", None),   # no rule -> None (fall back to model)
+        ("Toko Buku Gramedia", None),     # no rule -> None (fall back to model)
         (None, None),
     ],
 )
@@ -118,7 +113,6 @@ def test_categorize_by_vendor(vendor, expected):
 
 
 def test_vendor_rule_overrides_model_category():
-    # Model guessed "shopping" for a minimarket; the vendor rule corrects it.
     out = normalize_raw({"vendor_name": "Indomaret Cidatar", "category": "shopping"})
     assert out["category"] == "groceries"
 
@@ -128,74 +122,34 @@ def test_model_category_kept_when_no_vendor_rule():
     assert out["category"] == "shopping"
 
 
-# --- normalize_raw ---------------------------------------------------------
+# --- normalize_raw + computed total ----------------------------------------
 
 def test_normalize_raw_produces_valid_invoice():
     raw = {
-        "vendor_name": "PT Buah Segar",
-        "invoice_number": "INV/2026/0042",
-        "invoice_date": "21/06/2026",
+        "vendor_name": "Warung Pasta @ Kemang",
+        "transaction_datetime": "16-11-15 16:04:52",
         "currency": "IDR",
         "line_items": [
-            {"description": "Mangga Harum Manis", "quantity": "10", "unit_price": "25.000", "amount": "250.000"},
+            {"description": "Cheezy Freezy M", "amount": "25.000"},
+            {"description": "Lemon Tea", "amount": "11.000"},
         ],
-        "subtotal": "250.000",
-        "tax_amount": "27.500",
-        "total_amount": "277.500",
     }
     inv = Invoice(**normalize_raw(raw))
-    assert inv.invoice_date == date(2026, 6, 21)
-    assert inv.total_amount == Decimal("277500")
-    assert inv.line_items[0].amount == Decimal("250000")
+    assert inv.transaction_datetime == datetime(2015, 11, 16, 16, 4, 52)
+    assert inv.category == "dining"                         # vendor rule: "warung"
+    assert [li.amount for li in inv.line_items] == [Decimal("25000"), Decimal("11000")]
+    assert inv.total_amount == Decimal("36000")            # computed sum
 
 
-def test_normalize_raw_keeps_absent_fields_null():
-    raw = {"vendor_name": "X", "total_amount": "N/A", "invoice_date": ""}
-    out = normalize_raw(raw)
+def test_total_is_summed_not_taken_from_model():
+    # The model's own total (often the cash tendered) is ignored; we sum the items.
+    out = normalize_raw({
+        "line_items": [{"description": "A", "amount": "4.500"}],
+        "total_amount": "5.000",
+    })
+    assert out["total_amount"] == Decimal("4500")
+
+
+def test_normalize_raw_no_items_total_none():
+    out = normalize_raw({"vendor_name": "X", "line_items": []})
     assert out["total_amount"] is None
-    assert out["invoice_date"] is None
-
-
-# --- reconcile_totals ------------------------------------------------------
-
-def _invoice(**kw) -> Invoice:
-    base = dict(
-        line_items=[
-            LineItem(description="A", amount=Decimal("100")),
-            LineItem(description="B", amount=Decimal("200")),
-        ],
-        subtotal=Decimal("300"),
-        tax_amount=Decimal("33"),
-        total_amount=Decimal("333"),
-    )
-    base.update(kw)
-    return Invoice(**base)
-
-
-def test_reconcile_consistent_invoice():
-    report = reconcile_totals(_invoice())
-    assert report.line_items_sum == Decimal("300")
-    assert report.subtotal_ok is True
-    assert report.total_ok is True
-    assert report.consistent is True
-
-
-def test_reconcile_flags_total_mismatch():
-    report = reconcile_totals(_invoice(total_amount=Decimal("999")))
-    assert report.total_ok is False
-    assert report.consistent is False
-    assert report.notes  # explains what didn't add up
-
-
-def test_reconcile_flags_subtotal_mismatch():
-    report = reconcile_totals(_invoice(subtotal=Decimal("250")))
-    assert report.subtotal_ok is False
-    assert report.consistent is False
-
-
-def test_reconcile_missing_data_is_not_an_inconsistency():
-    # No line items, no subtotal -> nothing to contradict -> consistent.
-    inv = Invoice(total_amount=Decimal("500"), line_items=[])
-    report = reconcile_totals(inv)
-    assert report.subtotal_ok is None
-    assert report.consistent is True

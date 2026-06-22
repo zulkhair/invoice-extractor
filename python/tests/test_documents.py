@@ -26,6 +26,7 @@ def test_synthetic_pdf_rasterizes_to_png(synthetic_pdf_bytes):
 
 def test_ground_truth_label_is_schema_valid(synthetic):
     inv = Invoice(**synthetic["label"])
-    assert inv.total_amount == Decimal("5106000")
-    assert inv.vendor_tax_id == "01.234.567.8-901.000"
+    assert inv.total_amount == Decimal("4600000")     # sum of the 3 line items
+    assert inv.category == "groceries"
+    assert inv.transaction_datetime is not None
     assert len(inv.line_items) == 3

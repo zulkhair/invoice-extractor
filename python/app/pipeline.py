@@ -5,7 +5,7 @@
     text path returns weak JSON-> fall back to vision path
 
 "Weak" = fails Pydantic validation, or leaves a required-ish field null
-(vendor_name, invoice_number, total_amount).
+(vendor_name, total_amount).
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from pydantic import ValidationError
 from app import config, prompts
 from app.ollama_client import ChatResult, OllamaClient, OllamaError
 from app.pdf_text import extract_text_layer, is_pdf
-from app.postprocess import ConsistencyReport, normalize_raw, reconcile_totals
+from app.postprocess import normalize_raw
 from app.rasterize import image_to_png, is_image, pdf_to_pngs
 from app.schema import REQUIRED_ISH_FIELDS, Invoice
 
@@ -30,7 +30,6 @@ class ExtractionResult:
     path: str                     # "text" | "vision"
     model: str                    # resolved tag actually used
     latency_s: float
-    consistency: ConsistencyReport
     fell_back: bool = False       # text path was tried then abandoned
     warnings: list[str] = field(default_factory=list)
 
@@ -115,13 +114,11 @@ def _finish(
     warnings: list[str],
     fell_back: bool = False,
 ) -> ExtractionResult:
-    consistency = reconcile_totals(invoice)
     return ExtractionResult(
         invoice=invoice,
         path=path,
         model=chat.model,
         latency_s=round(chat.latency_s, 3),
-        consistency=consistency,
         fell_back=fell_back,
         warnings=warnings,
     )

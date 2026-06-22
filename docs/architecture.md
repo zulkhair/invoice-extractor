@@ -58,10 +58,9 @@ flowchart TD
     STRONG -->|"yes"| NORM
     VIS --> NORM
 
-    NORM["Parse + normalize (deterministic)<br/>• lenient JSON (numbers kept as raw text)<br/>• locale → Decimal, dates<br/>• category via vendor-keyword rules"]
+    NORM["Parse + normalize (deterministic)<br/>• lenient JSON (numbers kept as raw text)<br/>• locale → Decimal, datetime<br/>• category via vendor-keyword rules<br/>• total = sum of line item prices"]
     NORM --> VAL["Validate<br/>(Pydantic Invoice schema)"]
-    VAL --> REC["Reconcile totals<br/>line items vs subtotal vs total<br/>→ consistency flag"]
-    REC --> OUT["200 OK<br/>invoice + metadata<br/>(path, model, latency, consistency)"]
+    VAL --> OUT["200 OK<br/>invoice + metadata<br/>(path, model, latency, warnings)"]
 
     TEXT -. "Ollama /api/chat" .-> OLL[("Ollama / GPU")]
     VIS  -. "Ollama /api/chat" .-> OLL
@@ -72,8 +71,9 @@ flowchart TD
 - **Hybrid routing** — cheap text path for digital PDFs; vision path for scans/photos;
   automatic fallback when the text result is weak. (`app/pipeline.py`)
 - **Never trust the model** — the prompt asks it to copy values verbatim; all number
-  formatting (locale `1.250.000,00` → `Decimal`), date parsing, and arithmetic happen
-  in deterministic Python, and totals are reconciled into a `consistency` flag.
+  formatting (locale `1.250.000,00` → `Decimal`) and date/time parsing happen in
+  deterministic Python, and the **total is computed by summing the line item prices**
+  (the model's printed grand total — often the cash tendered — is ignored).
   (`app/postprocess.py`)
 - **Schema is the single source of truth** — the JSON schema injected into the prompt
   is generated from the Pydantic `Invoice` model, so prompt and validator can't drift.

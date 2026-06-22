@@ -1,9 +1,9 @@
 """Post-processing: turn the model's raw, locale-formatted strings into canonical
-Decimal/date values, and re-check totals ourselves.
+Decimal/datetime values, classify the category, and compute the total ourselves.
 
-Core principle: never trust the model's number formatting or
-arithmetic. Parse locale formats deterministically here, then reconcile
-line items vs subtotal vs total and flag inconsistencies.
+Core principle: never trust the model's number formatting or arithmetic. Parse
+locale formats and dates deterministically here, and compute the total by summing
+the line item prices rather than trusting whatever total the model printed.
 """
 
 from __future__ import annotations
@@ -13,9 +13,8 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 
 from dateutil import parser as date_parser
-from pydantic import BaseModel
 
-from app.schema import CATEGORIES, Invoice
+from app.schema import CATEGORIES
 
 # --- numbers ---------------------------------------------------------------
 
@@ -93,15 +92,16 @@ _ID_MONTHS = {
 }
 
 
-def parse_invoice_date(value) -> date | None:
-    """Parse a date string into a date. Day-first (ID convention) and tolerant
-    of Indonesian month names. Returns None if unparseable."""
+def parse_datetime(value) -> datetime | None:
+    """Parse a transaction date+time. Day-first (ID convention), tolerant of
+    Indonesian month names and messy receipt formats. Keeps the time when present
+    (midnight otherwise). Returns None if unparseable."""
     if value is None:
         return None
     if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
         return value
+    if isinstance(value, date):
+        return datetime(value.year, value.month, value.day)
     s = str(value).strip()
     if not s:
         return None
@@ -110,10 +110,9 @@ def parse_invoice_date(value) -> date | None:
         if idm in low:
             low = low.replace(idm, en)
     try:
-        dt = date_parser.parse(low, dayfirst=True, fuzzy=False)
+        return date_parser.parse(low, dayfirst=True, fuzzy=True)
     except (ValueError, OverflowError, TypeError):
         return None
-    return dt.date()
 
 
 # --- category --------------------------------------------------------------
@@ -165,29 +164,28 @@ def categorize_by_vendor(vendor_name) -> str | None:
 
 # --- raw normalization -----------------------------------------------------
 
-_MONEY_FIELDS = ("subtotal", "tax_amount", "total_amount")
-_DATE_FIELDS = ("invoice_date", "due_date")
-_LINE_MONEY = ("quantity", "unit_price", "amount")
-
-
 def normalize_raw(raw: dict) -> dict:
     """Normalize a raw model dict into types the Invoice schema accepts.
 
-    Locale numbers -> Decimal, date strings -> date, category -> known bucket,
-    unparseable -> None. Returns a new dict; does not mutate the input.
+    Parses the datetime and each line item price (locale -> Decimal), assigns the
+    category (vendor rule overriding the model), and computes total_amount by summing
+    the line item amounts — the model's own total is ignored. Returns a new dict;
+    does not mutate the input.
     """
     out = dict(raw)
-    for f in _MONEY_FIELDS:
-        if f in out:
-            out[f] = parse_decimal(out[f])
-    for f in _DATE_FIELDS:
-        if f in out:
-            out[f] = parse_invoice_date(out[f])
+
+    if "transaction_datetime" in out:
+        out["transaction_datetime"] = parse_datetime(out["transaction_datetime"])
+
     # Category: the vendor-keyword rule overrides the model's guess when it fires
     # (reliable for known chains); otherwise keep the model's canonicalized category.
     out["category"] = (
         categorize_by_vendor(out.get("vendor_name")) or parse_category(out.get("category"))
     )
+
+    # Line items: parse each price, then compute the total ourselves (never trust
+    # the model's printed grand total — it often grabs the cash tendered).
+    total: Decimal | None = None
     items = out.get("line_items")
     if isinstance(items, list):
         norm_items = []
@@ -195,58 +193,12 @@ def normalize_raw(raw: dict) -> dict:
             if not isinstance(it, dict):
                 continue
             it = dict(it)
-            for f in _LINE_MONEY:
-                if f in it:
-                    it[f] = parse_decimal(it[f])
+            if "amount" in it:
+                it["amount"] = parse_decimal(it["amount"])
             norm_items.append(it)
         out["line_items"] = norm_items
+        amounts = [it["amount"] for it in norm_items if it.get("amount") is not None]
+        if amounts:
+            total = sum(amounts, Decimal("0"))
+    out["total_amount"] = total
     return out
-
-
-# --- total reconciliation --------------------------------------------------
-
-class ConsistencyReport(BaseModel):
-    line_items_sum: Decimal | None = None
-    subtotal_ok: bool | None = None      # None = couldn't check (data missing)
-    total_ok: bool | None = None
-    consistent: bool = True              # False only when a check actually failed
-    notes: list[str] = []
-
-
-def reconcile_totals(
-    invoice: Invoice, tolerance: Decimal = Decimal("0.02")
-) -> ConsistencyReport:
-    """Recompute totals from line items and cross-check subtotal/tax/total.
-
-    A check that can't run (missing data) is recorded as None and does NOT make
-    the invoice inconsistent — only a check that runs and fails does.
-    """
-    notes: list[str] = []
-
-    amounts = [li.amount for li in invoice.line_items if li.amount is not None]
-    items_sum = sum(amounts, Decimal("0")) if amounts else None
-
-    subtotal_ok: bool | None = None
-    if items_sum is not None and invoice.subtotal is not None:
-        subtotal_ok = abs(items_sum - invoice.subtotal) <= tolerance
-        if not subtotal_ok:
-            notes.append(f"line items sum {items_sum} != subtotal {invoice.subtotal}")
-
-    total_ok: bool | None = None
-    base = invoice.subtotal if invoice.subtotal is not None else items_sum
-    if invoice.total_amount is not None and base is not None:
-        expected = base + (invoice.tax_amount or Decimal("0"))
-        total_ok = abs(expected - invoice.total_amount) <= tolerance
-        if not total_ok:
-            notes.append(
-                f"subtotal+tax {expected} != total {invoice.total_amount}"
-            )
-
-    consistent = subtotal_ok is not False and total_ok is not False
-    return ConsistencyReport(
-        line_items_sum=items_sum,
-        subtotal_ok=subtotal_ok,
-        total_ok=total_ok,
-        consistent=consistent,
-        notes=notes,
-    )

@@ -70,8 +70,9 @@ curl -s localhost:8000/health                # {"status":"ok",...}
 curl -s -F file=@invoice.pdf localhost:8000/extract | python -m json.tool
 ```
 
-`/extract` returns the validated `Invoice` plus metadata: `path` taken (text|vision),
-`model` + resolved tag, `latency_s`, and a `consistency` flag.
+`/extract` returns the validated `Invoice` (vendor, transaction datetime, currency,
+category, line items, and a `total_amount` computed by summing the line item prices)
+plus metadata: `path` taken (text|vision), `model` + resolved tag, `latency_s`, `warnings`.
 
 A simple **web UI** is served at the root — open <http://127.0.0.1:8000> to drag in a
 receipt and see the rendered result plus raw JSON.

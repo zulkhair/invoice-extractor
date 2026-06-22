@@ -43,7 +43,7 @@ def health() -> dict:
 @app.post("/extract")
 async def extract_endpoint(file: UploadFile = File(...)) -> JSONResponse:
     """Accept a PDF or image, run the hybrid pipeline, return validated Invoice
-    JSON plus metadata (path taken, model + tag, latency, consistency flag)."""
+    JSON plus metadata (path taken, model + tag, latency, warnings)."""
     data = await file.read()
     if not data:
         raise HTTPException(status_code=400, detail="empty upload")
@@ -61,7 +61,6 @@ async def extract_endpoint(file: UploadFile = File(...)) -> JSONResponse:
                 "model": result.model,
                 "latency_s": result.latency_s,
                 "fell_back": result.fell_back,
-                "consistency": result.consistency.model_dump(mode="json"),
                 "warnings": result.warnings,
                 "filename": file.filename,
             },

@@ -11,16 +11,15 @@ from pydantic import BaseModel
 
 from app.schema import Invoice, LineItem
 
-# Scalar fields scored for exact match (line_items scored separately). Tuned for the
-# expense tracker: what/where/when/how-much + category. Fields not tracked for personal
-# finance (tax, invoice number, NPWP, due date, subtotal) are still extracted but not
-# scored. raw_notes is always ignored.
+# Scalar fields scored for exact match (line_items scored separately). The expense
+# tracker keeps only what/where/when/how-much + category; total_amount is the computed
+# sum of line item prices.
 SCALAR_FIELDS = (
     "vendor_name",
-    "invoice_date",
+    "transaction_datetime",
     "currency",
-    "total_amount",
     "category",
+    "total_amount",
 )
 
 

@@ -1,6 +1,6 @@
 """Tests for field-level accuracy scoring (the benchmark harness core)."""
 
-from datetime import date
+from datetime import datetime
 from decimal import Decimal
 
 from app.schema import Invoice, LineItem
@@ -10,11 +10,10 @@ from app.scoring import score_invoice
 def _gold() -> Invoice:
     return Invoice(
         vendor_name="PT Buah Segar",
-        invoice_number="INV/2026/0042",
-        invoice_date=date(2026, 6, 21),
+        transaction_datetime=datetime(2026, 6, 21, 10, 30),
         currency="IDR",
-        total_amount=Decimal("277500"),
         category="groceries",
+        total_amount=Decimal("277500"),
         line_items=[
             LineItem(description="Mangga Harum Manis", amount=Decimal("250000")),
             LineItem(description="Jeruk", amount=Decimal("27500")),

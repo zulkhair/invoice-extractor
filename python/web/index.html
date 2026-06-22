@@ -163,11 +163,10 @@ function money(v, cur) {
   const s = isNaN(n) ? String(v) : n.toLocaleString("en-US");
   return (cur ? cur + " " : "") + s;
 }
+function dt(v) { return v ? String(v).replace("T", " ").replace(/\.\d+$/, "") : "—"; }
 
 function render(data, elapsed) {
   const inv = data.invoice || {}, m = data.metadata || {};
-  const cons = (m.consistency || {});
-  const consistent = cons.consistent !== false;
   const items = inv.line_items || [];
 
   const chips = [
@@ -175,17 +174,14 @@ function render(data, elapsed) {
     `<span class="chip">${esc(m.model || "?")}</span>`,
     `<span class="chip">${esc(m.latency_s ?? elapsed)}s</span>`,
     inv.category ? `<span class="chip cat">${esc(inv.category)}</span>` : "",
-    `<span class="chip ${consistent ? "good" : "bad"}">${consistent ? "✓ totals consistent" : "✗ totals off"}</span>`,
     m.fell_back ? `<span class="chip warn">fell back to vision</span>` : "",
   ].filter(Boolean).join("");
 
   const rows = items.map(li => `
     <tr>
       <td>${esc(dash(li.description))}</td>
-      <td class="num">${esc(dash(li.quantity))}</td>
-      <td class="num">${money(li.unit_price, inv.currency)}</td>
       <td class="num">${money(li.amount, inv.currency)}</td>
-    </tr>`).join("") || `<tr><td colspan="4" class="note">No line items</td></tr>`;
+    </tr>`).join("") || `<tr><td colspan="2" class="note">No line items</td></tr>`;
 
   $("result").hidden = false;
   $("result").innerHTML = `
@@ -193,11 +189,11 @@ function render(data, elapsed) {
     <div class="summary">
       <div class="vendor">${esc(dash(inv.vendor_name))}</div>
       <div class="total">${money(inv.total_amount, inv.currency)}</div>
-      <div class="meta-line">${esc(dash(inv.invoice_date))}${inv.due_date ? " · due " + esc(inv.due_date) : ""}${inv.invoice_number ? " · " + esc(inv.invoice_number) : ""}</div>
-      <div class="meta-line">subtotal ${money(inv.subtotal, inv.currency)}${inv.tax_amount ? " · tax " + money(inv.tax_amount, inv.currency) : ""}</div>
+      <div class="meta-line">${dt(inv.transaction_datetime)}</div>
+      <div class="meta-line">${esc(dash(inv.currency))} · total = sum of ${items.length} item${items.length === 1 ? "" : "s"}</div>
     </div>
     <table>
-      <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">Amount</th></tr></thead>
+      <thead><tr><th>Item</th><th class="num">Price</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
     <details>
