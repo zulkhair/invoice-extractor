@@ -73,6 +73,23 @@ curl -s -F file=@invoice.pdf localhost:8000/extract | python -m json.tool
 `/extract` returns the validated `Invoice` plus metadata: `path` taken (text|vision),
 `model` + resolved tag, `latency_s`, and a `consistency` flag.
 
+A simple **web UI** is served at the root — open <http://127.0.0.1:8000> to drag in a
+receipt and see the rendered result plus raw JSON.
+
+## Run with Docker
+
+The backend + UI run in a container; **Ollama stays on the host** (so it keeps the
+GPU — Docker can't reach the host GPU on Windows/macOS). Pull the models first, then
+from the repo root:
+
+```bash
+docker compose up --build        # then open http://localhost:8000
+```
+
+The container reaches the host's Ollama via `host.docker.internal`. Override models,
+timeouts, or `OLLAMA_HOST` in `docker-compose.yml`. (If you run Ollama in a container
+too — Linux/CPU only — point `OLLAMA_HOST` at that service instead.)
+
 ## Test & benchmark
 
 ```bash

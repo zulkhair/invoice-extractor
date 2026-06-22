@@ -1,0 +1,30 @@
+# Run the extractor's backend + web UI in a container.
+#
+# Ollama runs on the HOST (so it can use the GPU) and must already have the models
+# pulled (see python/README.md). Then:
+#
+#     docker compose up --build
+#     open http://localhost:8000
+#
+services:
+  invoice-extractor:
+    build:
+      context: ./python
+      dockerfile: Dockerfile
+    image: invoice-extractor
+    container_name: invoice-extractor
+    ports:
+      - "8000:8000"
+    environment:
+      # Reach the host's Ollama from inside the container.
+      OLLAMA_HOST: http://host.docker.internal:11434
+      OLLAMA_TIMEOUT_S: "600"        # vision extraction can be slow (first run warms the model up)
+      OLLAMA_NUM_CTX: "8192"
+      TEXT_PATH_MODEL: qwen2.5vl:3b-q4_K_M
+      VISION_PATH_MODEL: qwen2.5vl:3b-q4_K_M
+      # On a larger GPU you can force full offload:
+      # OLLAMA_NUM_GPU: "99"
+    extra_hosts:
+      # Lets host.docker.internal resolve on Linux (automatic on Docker Desktop Win/macOS).
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
