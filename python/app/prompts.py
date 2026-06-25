@@ -40,8 +40,11 @@ JSON schema (your output must validate against this):
 """
 
 # Vision and text paths share the same contract; only the carrier differs.
+# Trailing "/no_think" disables chain-of-thought on Qwen3 models (the Ollama `think`
+# flag is ignored for them) — we want the JSON directly, and the reasoning otherwise
+# burns the context budget and truncates the answer. Harmless for non-thinking models.
 _TEXT_USER = """\
-Extract the invoice below into the JSON schema. Remember: null for anything absent.
+Extract the invoice below into the JSON schema. Remember: null for anything absent. /no_think
 
 --- INVOICE TEXT ---
 {document_text}
@@ -51,7 +54,7 @@ Extract the invoice below into the JSON schema. Remember: null for anything abse
 _VISION_USER = """\
 Read the invoice in the attached image and extract it into the JSON schema. \
 Read the actual pixels — do not infer values from the schema. \
-Remember: null for anything absent.
+Remember: null for anything absent. /no_think
 """
 
 

@@ -104,7 +104,14 @@ class OllamaClient:
             "options": options,
         }
         if config.OLLAMA_KEEP_ALIVE:
-            payload["keep_alive"] = config.OLLAMA_KEEP_ALIVE
+            ka = config.OLLAMA_KEEP_ALIVE
+            # "-1" (forever) and "0" (unload now) must be sent as numbers — Ollama
+            # parses the *string* "-1" as a zero duration. "30m" stays a string.
+            payload["keep_alive"] = int(ka) if ka.lstrip("-").isdigit() else ka
+        # Disable chain-of-thought for thinking-capable models (e.g. Qwen3-VL): we want
+        # the JSON directly, and the reasoning otherwise eats the output token budget
+        # (truncating the JSON on item-heavy receipts). No-op for non-thinking models.
+        payload["think"] = False
         if json_format is True:
             payload["format"] = "json"
         elif isinstance(json_format, dict):
