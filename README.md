@@ -42,30 +42,29 @@ cd python && python3 -m venv .venv && .venv/bin/pip install -e ".[dev]" && cp .e
 cd go && cp .env.example .env && go test ./... && go run ./cmd/server
 ```
 Both expose `GET /health` and `POST /extract` (multipart file upload) and return the
-validated invoice plus metadata (path taken, model + tag, latency, consistency flag).
+validated invoice plus metadata (path taken, model + tag, latency, warnings).
 
 ## Example
 `POST /extract` with an invoice file returns:
 ```json
 {
   "invoice": {
-    "vendor_name": "PT Buah Segar Nusantara",
-    "vendor_tax_id": "01.234.567.8-901.000",
-    "invoice_number": "INV/2026/06/0042",
-    "invoice_date": "2026-06-21",
-    "due_date": "2026-07-21",
+    "vendor_name": "Indomaret Tlogomas 44 Malang",
+    "transaction_datetime": "2022-01-21T18:27:00",
     "currency": "IDR",
+    "category": "groceries",
     "line_items": [
-      {"description": "Mangga Harum Manis", "quantity": "100", "unit_price": "25000", "amount": "2500000"}
+      {"description": "POP MIE AYAM 75G", "amount": "4900"},
+      {"description": "LE MINERALE 600ML", "amount": "7000"}
     ],
-    "subtotal": "4600000",
-    "tax_amount": "506000",
-    "total_amount": "5106000"
+    "total_amount": "11900"
   },
-  "metadata": {"path": "vision", "model": "qwen2.5vl:7b-q4_K_M", "latency_s": 8.2, "consistent": true}
+  "metadata": {"path": "vision", "model": "qwen2.5vl:7b-q4_K_M", "latency_s": 8.2, "fell_back": false, "warnings": []}
 }
 ```
-Absent fields come back `null` (never fabricated). A runnable sample lives at
+It's an expense record: `category` is one of a fixed set of buckets, and `total_amount`
+is **computed by summing the line item prices** (not read from the document). Absent
+fields come back `null` (never fabricated). A runnable sample lives at
 `python/tests/fixtures/synthetic_invoice.pdf` (+ ground truth in `tests/labels/`).
 
 ## Models (verified 2026-06-21)
