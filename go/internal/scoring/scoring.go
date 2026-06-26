@@ -13,8 +13,7 @@ import (
 
 // ScalarFields is the fixed display/scoring order for per-field accuracy.
 var ScalarFields = []string{
-	"vendor_name", "vendor_tax_id", "invoice_number", "invoice_date",
-	"due_date", "currency", "subtotal", "tax_amount", "total_amount",
+	"vendor_name", "transaction_datetime", "currency", "category", "total_amount",
 }
 
 type InvoiceScore struct {
@@ -29,15 +28,11 @@ type InvoiceScore struct {
 
 func Score(pred, gold schema.Invoice) InvoiceScore {
 	pf := map[string]bool{
-		"vendor_name":    eqStr(pred.VendorName, gold.VendorName),
-		"vendor_tax_id":  eqStr(pred.VendorTaxID, gold.VendorTaxID),
-		"invoice_number": eqStr(pred.InvoiceNumber, gold.InvoiceNumber),
-		"invoice_date":   eqDate(pred.InvoiceDate, gold.InvoiceDate),
-		"due_date":       eqDate(pred.DueDate, gold.DueDate),
-		"currency":       eqStr(pred.Currency, gold.Currency),
-		"subtotal":       eqDec(pred.Subtotal, gold.Subtotal),
-		"tax_amount":     eqDec(pred.TaxAmount, gold.TaxAmount),
-		"total_amount":   eqDec(pred.TotalAmount, gold.TotalAmount),
+		"vendor_name":          eqStr(pred.VendorName, gold.VendorName),
+		"transaction_datetime": eqDate(pred.TransactionDatetime, gold.TransactionDatetime),
+		"currency":             eqStr(pred.Currency, gold.Currency),
+		"category":             eqStr(pred.Category, gold.Category),
+		"total_amount":         eqDec(pred.TotalAmount, gold.TotalAmount),
 	}
 	correct := 0
 	for _, v := range pf {

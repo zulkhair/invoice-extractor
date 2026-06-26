@@ -1,5 +1,6 @@
 // Package pipeline routes a document through the text-layer path or the vision
-// path, with fallback.
+// path, with fallback. When cfg.OCRModel is set, the vision path becomes two models:
+// an OCR specialist transcribes the image, then the text-path model maps it.
 package pipeline
 
 import (
@@ -29,13 +30,14 @@ type Result struct {
 var jsonObjRe = regexp.MustCompile(`(?s)\{.*\}`)
 
 // ParseModelContent parses raw model output into a canonical Invoice (wire ->
-// normalize). Returns ok=false if no JSON object can be recovered.
-func ParseModelContent(content string) (schema.Invoice, bool) {
+// normalize). Returns ok=false if no JSON object can be recovered. defaultCurrency
+// fills an absent currency (pass "" to leave it null).
+func ParseModelContent(content, defaultCurrency string) (schema.Invoice, bool) {
 	raw, ok := unmarshalLenient(content)
 	if !ok {
 		return schema.Invoice{}, false
 	}
-	return postprocess.Normalize(raw), true
+	return postprocess.Normalize(raw, defaultCurrency), true
 }
 
 func unmarshalLenient(content string) (schema.RawInvoice, bool) {
@@ -89,12 +91,23 @@ func Extract(
 	}
 }
 
+// chatOptions are the shared runtime knobs for a JSON chat call.
+func chatOptions(cfg config.Config) ollama.Options {
+	return ollama.Options{
+		Temperature: cfg.Temperature,
+		NumCtx:      cfg.NumCtx,
+		NumGPU:      cfg.NumGPU,
+		KeepAlive:   cfg.KeepAlive,
+		JSONFormat:  true,
+	}
+}
+
 func tryText(ctx context.Context, text string, cl *ollama.Client, cfg config.Config) (schema.Invoice, ollama.ChatResult, bool) {
-	chat, err := cl.Chat(ctx, cfg.TextPathModel, prompts.System(), prompts.TextUser(text), nil, true, cfg.Temperature)
+	chat, err := cl.Chat(ctx, cfg.TextPathModel, prompts.System(), prompts.TextUser(text), nil, chatOptions(cfg))
 	if err != nil {
 		return schema.Invoice{}, ollama.ChatResult{}, false
 	}
-	inv, ok := ParseModelContent(chat.Content)
+	inv, ok := ParseModelContent(chat.Content, cfg.DefaultCurrency)
 	if !ok {
 		return schema.Invoice{}, chat, false
 	}
@@ -110,15 +123,43 @@ func visionPDF(ctx context.Context, data []byte, cl *ollama.Client, cfg config.C
 }
 
 func visionImages(ctx context.Context, images [][]byte, cl *ollama.Client, cfg config.Config, warnings []string, fellBack bool) (Result, error) {
-	chat, err := cl.Chat(ctx, cfg.VisionPathModel, prompts.System(), prompts.VisionUser(), images, true, cfg.Temperature)
+	// Two-model path: OCR specialist transcribes, text-path model interprets.
+	if cfg.OCRModel != "" {
+		return ocrMap(ctx, images, cl, cfg, warnings, fellBack)
+	}
+	chat, err := cl.Chat(ctx, cfg.VisionPathModel, prompts.System(), prompts.VisionUser(), images, chatOptions(cfg))
 	if err != nil {
 		return Result{}, fmt.Errorf("vision path: %w", err)
 	}
-	inv, ok := ParseModelContent(chat.Content)
+	inv, ok := ParseModelContent(chat.Content, cfg.DefaultCurrency)
 	if !ok {
 		return Result{}, fmt.Errorf("vision model did not return schema-valid JSON")
 	}
 	return finish(inv, "vision", chat, warnings, fellBack), nil
+}
+
+// ocrMap OCRs the image(s) with the OCR specialist, then maps the transcription to the
+// schema with the text-path model. Latency is the sum; Model reports both tags.
+func ocrMap(ctx context.Context, images [][]byte, cl *ollama.Client, cfg config.Config, warnings []string, fellBack bool) (Result, error) {
+	ocrOpts := ollama.Options{
+		Temperature: cfg.Temperature,
+		NumCtx:      cfg.NumCtx,
+		NumGPU:      cfg.NumGPU,
+		NumPredict:  cfg.OCRNumPredict,
+		KeepAlive:   cfg.KeepAlive,
+	}
+	gen, err := cl.Generate(ctx, cfg.OCRModel, prompts.OCR(), images, ocrOpts)
+	if err != nil {
+		return Result{}, fmt.Errorf("OCR step: %w", err)
+	}
+	inv, chat, ok := tryText(ctx, gen.Content, cl, cfg)
+	if !ok {
+		return Result{}, fmt.Errorf("OCR transcription did not map to schema-valid JSON")
+	}
+	res := finish(inv, "vision", chat, warnings, fellBack)
+	res.Model = cfg.OCRModel + " + " + chat.Model
+	res.LatencySeconds = gen.Latency.Seconds() + chat.Latency.Seconds()
+	return res, nil
 }
 
 func finish(inv schema.Invoice, path string, chat ollama.ChatResult, warnings []string, fellBack bool) Result {

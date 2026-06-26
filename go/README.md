@@ -1,8 +1,9 @@
 # Invoice Extractor — Go
 
-Go-native build of the local invoice → JSON service (parallel to `../python`).
-Single binary, `net/http`, native Ollama Go client. Same `/extract` contract and
-acceptance gates as the Python app — benchmarks are comparable across both.
+Go-native build of the local receipt/invoice → JSON expense-record service (parallel
+to `../python`). Same `/extract` contract and schema (vendor, transaction datetime,
+currency, category, line items, computed total) as the Python app — benchmarks are
+comparable across both.
 
 See the [root README](../README.md) for the shared constraints and verified model tags.
 
@@ -21,11 +22,12 @@ cmd/bench        benchmark harness (per-model, per-field scorecard)
 cmd/visioncheck  vision sanity check (two-image discriminator)
 internal/
   schema         RawInvoice (wire, all strings) + Invoice (canonical, typed)
-  postprocess    Raw -> canonical: locale numbers, dates, total reconciliation (TDD)
-  ollama         wraps github.com/ollama/ollama/api (text + vision chat)
+  postprocess    Raw -> canonical: locale numbers, datetime, vendor->category rule,
+                 computed total = sum of line prices (TDD)
+  ollama         wraps github.com/ollama/ollama/api (chat + OCR generate)
   pdftext        poppler text-layer detect/extract (behind Backend interface)
   rasterize      pdftoppm -> PNG; image normalize (x/image)
-  pipeline       text vs vision routing + fallback
+  pipeline       text vs vision routing + fallback; optional OCR->map (OCR_MODEL)
   scoring        field-level accuracy (TDD)
   httpapi        handlers
   config         env-loaded config
@@ -36,8 +38,18 @@ testdata/        fixtures + labels (real ones gitignored; synthetic kept)
 Go's `encoding/json` is strict, not coercive. The model emits `"1.250.000,00"` /
 `"21 Juni 2026"`; unmarshalling those straight into `decimal.Decimal`/`time.Time`
 fails and loses the whole response. So `RawInvoice` is all `*string` (lenient wire),
-and `postprocess.Normalize` coerces it into the typed, validated `Invoice`. Money is
-always `shopspring/decimal`, never `float64`.
+and `postprocess.Normalize` coerces it into the typed, validated `Invoice` — parsing the
+datetime, summing the line prices into `total_amount` (the model's printed total is
+ignored), and assigning the category via a vendor-keyword rule. Money is always
+`shopspring/decimal`, never `float64`.
+
+## Optional two-model OCR mode
+Set `OCR_MODEL` (e.g. `glm-ocr`) and the vision path becomes two models: the OCR model
+transcribes the image to text via `/api/generate`, then `TEXT_PATH_MODEL` (e.g.
+`qwen2.5:14b-instruct`) maps that text to the schema. Empty `OCR_MODEL` keeps the
+single-VLM vision path. Both stay resident only with server-side
+`OLLAMA_MAX_LOADED_MODELS=2` and enough VRAM. `DEFAULT_CURRENCY` fills an absent currency
+when one isn't printed; `OCR_NUM_PREDICT` caps the OCR output (repetition guard).
 
 ## Run / test / bench
 ```bash

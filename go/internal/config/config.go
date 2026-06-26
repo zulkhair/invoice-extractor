@@ -22,6 +22,19 @@ type Config struct {
 	// Live pipeline models.
 	TextPathModel   string
 	VisionPathModel string
+	// Optional OCR specialist: when set, the vision path OCRs the image to text with
+	// this model then maps the text to the schema with TextPathModel (read-then-interpret).
+	// Empty = single-VLM vision path.
+	OCRModel      string
+	OCRNumPredict int
+
+	// Default ISO currency when a receipt prints none (e.g. "IDR"); empty = leave null.
+	DefaultCurrency string
+
+	// Ollama runtime options (applied to every call).
+	NumGPU    int // <0 = let Ollama decide (omit num_gpu)
+	NumCtx    int
+	KeepAlive string
 
 	TextLayerMinChars int
 	RasterDPI         int
@@ -44,6 +57,12 @@ func Load() Config {
 		ModelText:         env("MODEL_TEXT", "nuextract"),
 		TextPathModel:     env("TEXT_PATH_MODEL", env("MODEL_SMALL", "qwen2.5vl:3b-q4_K_M")),
 		VisionPathModel:   env("VISION_PATH_MODEL", env("MODEL_FALLBACK", "qwen2.5vl:7b-q4_K_M")),
+		OCRModel:          env("OCR_MODEL", ""),
+		OCRNumPredict:     envInt("OCR_NUM_PREDICT", 2048),
+		DefaultCurrency:   env("DEFAULT_CURRENCY", ""),
+		NumGPU:            envInt("OLLAMA_NUM_GPU", -1),
+		NumCtx:            envInt("OLLAMA_NUM_CTX", 8192),
+		KeepAlive:         env("OLLAMA_KEEP_ALIVE", ""),
 		TextLayerMinChars: envInt("TEXT_LAYER_MIN_CHARS", 100),
 		RasterDPI:         envInt("RASTER_DPI", 200),
 		RasterMaxPx:       envInt("RASTER_MAX_PX", 1600),

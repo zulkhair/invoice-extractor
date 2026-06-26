@@ -101,7 +101,7 @@ func ask(ctx context.Context, cl *ollama.Client, model string, img []byte, temp 
 	res, err := cl.Chat(ctx, model,
 		"You read text off invoice images. Answer with only what is asked.",
 		"What is the invoice number printed on this image? Reply with ONLY the invoice number.",
-		[][]byte{img}, false, temp)
+		[][]byte{img}, ollama.Options{Temperature: temp})
 	if err != nil {
 		return "", err
 	}

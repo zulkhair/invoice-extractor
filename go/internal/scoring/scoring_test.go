@@ -21,11 +21,11 @@ func tp(y, m, d int) *time.Time {
 
 func gold() schema.Invoice {
 	return schema.Invoice{
-		VendorName:    sp("PT Buah Segar"),
-		InvoiceNumber: sp("INV/2026/0042"),
-		InvoiceDate:   tp(2026, 6, 21),
-		Currency:      sp("IDR"),
-		TotalAmount:   dp("277500"),
+		VendorName:          sp("PT Buah Segar"),
+		TransactionDatetime: tp(2026, 6, 21),
+		Currency:            sp("IDR"),
+		Category:            sp("groceries"),
+		TotalAmount:         dp("277500"),
 		LineItems: []schema.LineItem{
 			{Description: "Mangga Harum Manis", Amount: dp("250000")},
 			{Description: "Jeruk", Amount: dp("27500")},
@@ -83,7 +83,7 @@ func TestNullVsValue(t *testing.T) {
 	if s.PerField["vendor_name"] {
 		t.Error("nil vs value should be wrong")
 	}
-	if !s.PerField["invoice_number"] {
+	if !s.PerField["currency"] {
 		t.Error("nil vs nil should be correct")
 	}
 }

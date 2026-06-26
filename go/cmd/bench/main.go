@@ -36,10 +36,10 @@ var imgExt = map[string]bool{
 type fixture struct{ stem, path, label string }
 
 type modelSummary struct {
-	model                       string
-	n, fails                    int
-	acc, liPrec, liRec, medLat  float64
-	fieldHits, fieldSeen        map[string]int
+	model                      string
+	n, fails                   int
+	acc, liPrec, liRec, medLat float64
+	fieldHits, fieldSeen       map[string]int
 }
 
 func main() {
@@ -87,14 +87,15 @@ func main() {
 				s.fails++
 				continue
 			}
-			chat, err := cl.Chat(ctx, model, sysPrompt, prompts.VisionUser(), images, true, cfg.Temperature)
+			chat, err := cl.Chat(ctx, model, sysPrompt, prompts.VisionUser(), images,
+				ollama.Options{Temperature: cfg.Temperature, NumCtx: cfg.NumCtx, NumGPU: cfg.NumGPU, JSONFormat: true})
 			if err != nil {
 				fmt.Printf("  [%s] %s: %v\n", model, fx.stem, err)
 				s.fails++
 				continue
 			}
 			lats = append(lats, chat.Latency.Seconds())
-			pred, ok := pipeline.ParseModelContent(chat.Content)
+			pred, ok := pipeline.ParseModelContent(chat.Content, cfg.DefaultCurrency)
 			if !ok {
 				fmt.Printf("  [%s] %s: parse failure\n", model, fx.stem)
 				s.fails++
@@ -150,7 +151,7 @@ func loadGold(label string) (schema.Invoice, error) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return schema.Invoice{}, err
 	}
-	return postprocess.Normalize(raw), nil
+	return postprocess.Normalize(raw, ""), nil
 }
 
 func toImages(path string, cfg config.Config) ([][]byte, error) {

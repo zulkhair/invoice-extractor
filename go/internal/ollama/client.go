@@ -1,7 +1,7 @@
 // Package ollama wraps the official github.com/ollama/ollama/api client with a
-// small Chat surface (text + vision), plus introspection for health and the
-// pull-verification path. Kept thin so the wire details stay in one place — the
-// api package's field names have drifted across releases.
+// small Chat + Generate surface (text + vision + OCR), plus introspection for health
+// and the pull-verification path. Kept thin so the wire details stay in one place —
+// the api package's field names have drifted across releases.
 package ollama
 
 import (
@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,6 +27,46 @@ type ChatResult struct {
 	Model     string
 	Latency   time.Duration
 	EvalCount int
+}
+
+// Options are the per-call runtime knobs shared by Chat and Generate.
+type Options struct {
+	Temperature float64
+	NumCtx      int    // >0 to send num_ctx
+	NumGPU      int    // <0 = let Ollama decide (omit num_gpu)
+	NumPredict  int    // >0 to cap output tokens (OCR repetition guard)
+	KeepAlive   string // "", "-1"/"0" (numeric seconds), or a duration like "30m"
+	JSONFormat  bool   // request format:"json"
+}
+
+func (o Options) toMap() map[string]any {
+	m := map[string]any{"temperature": o.Temperature}
+	if o.NumCtx > 0 {
+		m["num_ctx"] = o.NumCtx
+	}
+	if o.NumGPU >= 0 {
+		m["num_gpu"] = o.NumGPU
+	}
+	if o.NumPredict > 0 {
+		m["num_predict"] = o.NumPredict
+	}
+	return m
+}
+
+// keepAlive parses "-1"/"0"/digits as seconds and "30m"-style strings as a duration.
+// A negative duration tells Ollama to keep the model resident forever.
+func keepAlive(s string) *api.Duration {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	if n, err := strconv.Atoi(s); err == nil {
+		return &api.Duration{Duration: time.Duration(n) * time.Second}
+	}
+	if d, err := time.ParseDuration(s); err == nil {
+		return &api.Duration{Duration: d}
+	}
+	return nil
 }
 
 func New(host string, timeout time.Duration) (*Client, error) {
@@ -62,8 +103,7 @@ func (c *Client) Chat(
 	ctx context.Context,
 	model, system, user string,
 	images [][]byte,
-	jsonFormat bool,
-	temperature float64,
+	opts Options,
 ) (ChatResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
@@ -79,12 +119,13 @@ func (c *Client) Chat(
 
 	stream := false
 	req := &api.ChatRequest{
-		Model:    model,
-		Messages: []api.Message{{Role: "system", Content: system}, userMsg},
-		Stream:   &stream,
-		Options:  map[string]any{"temperature": temperature},
+		Model:     model,
+		Messages:  []api.Message{{Role: "system", Content: system}, userMsg},
+		Stream:    &stream,
+		Options:   opts.toMap(),
+		KeepAlive: keepAlive(opts.KeepAlive),
 	}
-	if jsonFormat {
+	if opts.JSONFormat {
 		req.Format = json.RawMessage(`"json"`)
 	}
 
@@ -100,6 +141,58 @@ func (c *Client) Chat(
 	})
 	if err != nil {
 		return ChatResult{}, fmt.Errorf("ollama chat (%s): %w", model, err)
+	}
+	return ChatResult{
+		Content:   sb.String(),
+		Model:     model,
+		Latency:   time.Since(start),
+		EvalCount: evalCount,
+	}, nil
+}
+
+// Generate runs a single-shot /api/generate. Used for OCR transcription: free-text
+// output (not JSON), which GLM-OCR and similar models read more reliably via generate
+// than via chat.
+func (c *Client) Generate(
+	ctx context.Context,
+	model, prompt string,
+	images [][]byte,
+	opts Options,
+) (ChatResult, error) {
+	ctx, cancel := context.WithTimeout(ctx, c.timeout)
+	defer cancel()
+
+	stream := false
+	req := &api.GenerateRequest{
+		Model:     model,
+		Prompt:    prompt,
+		Stream:    &stream,
+		Options:   opts.toMap(),
+		KeepAlive: keepAlive(opts.KeepAlive),
+	}
+	if len(images) > 0 {
+		imgs := make([]api.ImageData, len(images))
+		for i, b := range images {
+			imgs[i] = api.ImageData(b)
+		}
+		req.Images = imgs
+	}
+	if opts.JSONFormat {
+		req.Format = json.RawMessage(`"json"`)
+	}
+
+	var sb strings.Builder
+	var evalCount int
+	start := time.Now()
+	err := c.api.Generate(ctx, req, func(r api.GenerateResponse) error {
+		sb.WriteString(r.Response)
+		if r.Done {
+			evalCount = r.EvalCount
+		}
+		return nil
+	})
+	if err != nil {
+		return ChatResult{}, fmt.Errorf("ollama generate (%s): %w", model, err)
 	}
 	return ChatResult{
 		Content:   sb.String(),

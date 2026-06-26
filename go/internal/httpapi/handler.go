@@ -35,6 +35,7 @@ func healthHandler(cl *ollama.Client, cfg config.Config) http.HandlerFunc {
 			"pdf_backend":       cfg.PDFBackend,
 			"text_path_model":   cfg.TextPathModel,
 			"vision_path_model": cfg.VisionPathModel,
+			"ocr_model":         cfg.OCRModel,
 		})
 	}
 }
@@ -74,13 +75,12 @@ func extractHandler(cl *ollama.Client, be pdftext.Backend, cfg config.Config) ht
 		writeJSON(w, http.StatusOK, map[string]any{
 			"invoice": res.Invoice,
 			"metadata": map[string]any{
-				"path":        res.Path,
-				"model":       res.Model,
-				"latency_s":   res.LatencySeconds,
-				"fell_back":   res.FellBack,
-				"consistent":  res.Invoice.Consistent,
-				"warnings":    res.Warnings,
-				"filename":    header.Filename,
+				"path":      res.Path,
+				"model":     res.Model,
+				"latency_s": res.LatencySeconds,
+				"fell_back": res.FellBack,
+				"warnings":  res.Warnings,
+				"filename":  header.Filename,
 			},
 		})
 	}
