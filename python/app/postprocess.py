@@ -14,6 +14,7 @@ from decimal import Decimal, InvalidOperation
 
 from dateutil import parser as date_parser
 
+from app import config
 from app.schema import CATEGORIES
 
 # --- numbers ---------------------------------------------------------------
@@ -176,6 +177,12 @@ def normalize_raw(raw: dict) -> dict:
 
     if "transaction_datetime" in out:
         out["transaction_datetime"] = parse_datetime(out["transaction_datetime"])
+
+    # Currency: fall back to the configured default when the receipt printed none
+    # (opt-in via DEFAULT_CURRENCY; off by default so we never fabricate silently).
+    cur = out.get("currency")
+    if config.DEFAULT_CURRENCY and (cur is None or str(cur).strip() == ""):
+        out["currency"] = config.DEFAULT_CURRENCY
 
     # Category: the vendor-keyword rule overrides the model's guess when it fires
     # (reliable for known chains); otherwise keep the model's canonicalized category.

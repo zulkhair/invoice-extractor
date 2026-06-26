@@ -28,7 +28,7 @@ flowchart LR
     subgraph host["Host — native, GPU"]
         direction TB
         ollama["Ollama<br/>:11434"]
-        gpu["GTX 1080 Ti<br/>qwen2.5vl:3b (Q4 GGUF)"]
+        gpu["Local GPU<br/>quantized GGUF model(s)"]
         ollama --> gpu
     end
 
@@ -54,7 +54,7 @@ flowchart TD
     C -->|"no"| RAST
     TEXT --> STRONG{"Strong result?<br/>vendor + total present"}
     STRONG -->|"no → fall back"| RAST
-    RAST --> VIS["Vision path<br/>qwen2.5vl:3b on the image"]
+    RAST --> VIS["Vision path<br/>VLM on the image,<br/>or optional OCR→map two-model"]
     STRONG -->|"yes"| NORM
     VIS --> NORM
 
@@ -70,6 +70,11 @@ flowchart TD
 
 - **Hybrid routing** — cheap text path for digital PDFs; vision path for scans/photos;
   automatic fallback when the text result is weak. (`app/pipeline.py`)
+- **Optional OCR specialist** — set `OCR_MODEL` and the vision path becomes two models: a
+  dedicated OCR model (e.g. `glm-ocr`) transcribes the image to text via `/api/generate`,
+  then `TEXT_PATH_MODEL` maps that text to the schema. The OCR model reads messy receipts
+  well while a general model handles the semantics; left unset, the single-VLM vision path
+  is used. (`app/pipeline.py`)
 - **Never trust the model** — the prompt asks it to copy values verbatim; all number
   formatting (locale `1.250.000,00` → `Decimal`) and date/time parsing happen in
   deterministic Python, and the **total is computed by summing the line item prices**

@@ -91,6 +91,10 @@ def _vision(
     warnings: list[str],
     fell_back: bool = False,
 ) -> ExtractionResult:
+    # Two-model path: an OCR specialist transcribes the pixels, then the text-path
+    # mapper turns that transcription into the schema (read-then-interpret).
+    if config.OCR_MODEL:
+        return _ocr_map(images, client, warnings, fell_back=fell_back)
     try:
         chat = client.chat(
             model=config.VISION_PATH_MODEL,
@@ -105,6 +109,39 @@ def _vision(
     if invoice is None:
         raise ExtractionError("vision model did not return schema-valid JSON")
     return _finish(invoice, "vision", chat, warnings, fell_back=fell_back)
+
+
+def _ocr_map(
+    images: list[bytes],
+    client: OllamaClient,
+    warnings: list[str],
+    fell_back: bool = False,
+) -> ExtractionResult:
+    """OCR the image(s) with the OCR specialist, then map the transcription to the
+    schema with the text-path model. Latency is the sum of both calls; `model`
+    reports both tags."""
+    try:
+        ocr = client.generate(
+            model=config.OCR_MODEL,
+            prompt=prompts.ocr_prompt(),
+            images=images,
+            num_predict=config.OCR_NUM_PREDICT,
+        )
+    except OllamaError as e:
+        raise ExtractionError(f"OCR step failed: {e}") from e
+
+    res = _try_text(ocr.content, client)
+    if res is None:
+        raise ExtractionError("OCR transcription did not map to schema-valid JSON")
+    invoice, chat = res
+    return ExtractionResult(
+        invoice=invoice,
+        path="vision",
+        model=f"{config.OCR_MODEL} + {chat.model}",
+        latency_s=round(ocr.latency_s + chat.latency_s, 3),
+        fell_back=fell_back,
+        warnings=warnings,
+    )
 
 
 def _finish(

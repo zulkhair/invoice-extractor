@@ -67,12 +67,24 @@ MODEL_TEXT = _get("MODEL_TEXT", "nuextract")
 # generic prompt; the vision path model must be vision-capable.
 TEXT_PATH_MODEL = _get("TEXT_PATH_MODEL", MODEL_SMALL)        # cheap, fast, reliable
 VISION_PATH_MODEL = _get("VISION_PATH_MODEL", MODEL_FALLBACK)  # stronger VLM for pixels
+# Optional OCR/vision specialist. When set, the vision path OCRs the image to text
+# with this model and then maps that transcription to JSON with TEXT_PATH_MODEL — a
+# fast "read then interpret" split (e.g. OCR_MODEL=glm-ocr + a general TEXT_PATH_MODEL).
+# Empty = legacy single-VLM vision path (VISION_PATH_MODEL reads the pixels directly).
+OCR_MODEL = _get("OCR_MODEL", "").strip()
+# Cap the OCR transcription length (Ollama `num_predict`). A receipt is a few hundred
+# tokens, but some images send GLM-OCR into a repetition loop (7k+ tokens, ~25s). The
+# real content fits well within this; the mapper ignores any trailing junk. 0 = no cap.
+OCR_NUM_PREDICT = int(_get("OCR_NUM_PREDICT", "2048"))
 
 # --- Pipeline tuning ---
 TEXT_LAYER_MIN_CHARS = int(_get("TEXT_LAYER_MIN_CHARS", "100"))
 RASTER_DPI = int(_get("RASTER_DPI", "200"))
 RASTER_MAX_PX = int(_get("RASTER_MAX_PX", "1600"))
 LLM_TEMPERATURE = float(_get("LLM_TEMPERATURE", "0"))
+# Default ISO-4217 currency when a receipt prints no currency code (many ID receipts
+# show only "Rp" or bare numbers). Empty = never fabricate (leave null). Opt-in.
+DEFAULT_CURRENCY = _get("DEFAULT_CURRENCY", "").strip() or None
 
 # --- Paths ---
 PROJECT_ROOT = _PROJECT_ROOT

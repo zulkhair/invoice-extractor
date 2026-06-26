@@ -58,9 +58,28 @@ Remember: null for anything absent. /no_think
 """
 
 
+# OCR step (vision/OCR specialist, e.g. GLM-OCR). We want a faithful transcription,
+# NOT interpretation — a general text model maps the result to the schema afterwards.
+# OCR models are transcribers, not instruction-followers: feeding them the JSON schema
+# makes them echo it, so keep this lean and transcription-focused.
+_OCR = """\
+OCR this receipt into Markdown. Transcribe exactly what is printed — do not summarize, \
+reformat numbers, translate, or invent anything:
+- the store / vendor name,
+- the full transaction date and time,
+- the currency or any "Rp"/"$" symbol if shown,
+- a table of every printed line: each purchased item with its price, AND any
+  subtotal / total / cash / change / tax (PPN) lines, exactly as printed.\
+"""
+
+
 def system_prompt() -> str:
     schema_str = json.dumps(invoice_json_schema(), indent=2)
     return _SYSTEM.format(schema=schema_str, categories=", ".join(CATEGORIES))
+
+
+def ocr_prompt() -> str:
+    return _OCR
 
 
 def text_user_prompt(document_text: str) -> str:

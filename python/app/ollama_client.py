@@ -139,6 +139,52 @@ class OllamaClient:
         )
 
 
+    def generate(
+        self,
+        model: str,
+        prompt: str,
+        images: list[bytes | str] | None = None,
+        temperature: float | None = None,
+        num_predict: int | None = None,
+    ) -> ChatResult:
+        """Single-shot /api/generate — used for OCR transcription (free-text output,
+        not JSON). GLM-OCR and similar vision/OCR models read more reliably via
+        /api/generate than /api/chat, so the OCR step uses this rather than chat().
+        """
+        options: dict = {
+            "temperature": config.LLM_TEMPERATURE if temperature is None else temperature,
+            "num_ctx": config.OLLAMA_NUM_CTX,
+        }
+        if config.OLLAMA_NUM_GPU is not None:
+            options["num_gpu"] = config.OLLAMA_NUM_GPU
+        if num_predict:
+            options["num_predict"] = num_predict
+
+        payload: dict = {"model": model, "prompt": prompt, "stream": False, "options": options}
+        if images:
+            payload["images"] = [_to_b64(img) for img in images]
+        if config.OLLAMA_KEEP_ALIVE:
+            ka = config.OLLAMA_KEEP_ALIVE
+            payload["keep_alive"] = int(ka) if ka.lstrip("-").isdigit() else ka
+
+        t0 = time.perf_counter()
+        try:
+            r = httpx.post(f"{self.host}/api/generate", json=payload, timeout=self.timeout_s)
+        except httpx.HTTPError as e:
+            raise OllamaError(f"Ollama request failed ({self.host}): {e}") from e
+        latency = time.perf_counter() - t0
+        if r.status_code != 200:
+            raise OllamaError(f"Ollama {r.status_code}: {r.text[:400]}")
+        data = r.json()
+        return ChatResult(
+            content=data.get("response", ""),
+            model=model,
+            latency_s=latency,
+            raw=data,
+            eval_count=data.get("eval_count"),
+        )
+
+
 def _to_b64(img: bytes | str) -> str:
     if isinstance(img, str):
         return img  # already base64

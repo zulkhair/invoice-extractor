@@ -26,6 +26,16 @@ Invoice (PDF/image)
 Text-mode calls are cheaper/faster and keep the single GPU free; only scans/images
 hit the heavy vision model.
 
+### Optional: two-model OCR mode
+
+Set `OCR_MODEL` to split *reading* from *interpreting*: a dedicated OCR model transcribes
+the image to text, then `TEXT_PATH_MODEL` maps that text to the schema. A small OCR
+specialist (e.g. `glm-ocr`, 1.1B) reads receipt tables far better than a general small
+VLM, while a general text model (e.g. `qwen2.5:14b-instruct`) handles the semantics —
+fast and accurate. Leave `OCR_MODEL` empty (the default) to use the single-VLM vision
+path above. To keep both models resident, the Ollama server needs
+`OLLAMA_MAX_LOADED_MODELS=2` and enough VRAM for both.
+
 ## Model tags (VERIFIED 2026-06-21)
 
 **"NuExtract3 4B" does not exist.** Verified substitutions:

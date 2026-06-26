@@ -17,6 +17,7 @@ from app.postprocess import (
     parse_datetime,
     parse_decimal,
 )
+from app import config
 from app.schema import Invoice
 
 
@@ -153,3 +154,22 @@ def test_total_is_summed_not_taken_from_model():
 def test_normalize_raw_no_items_total_none():
     out = normalize_raw({"vendor_name": "X", "line_items": []})
     assert out["total_amount"] is None
+
+
+# --- currency default (opt-in) ---------------------------------------------
+
+def test_currency_default_fills_when_absent(monkeypatch):
+    monkeypatch.setattr(config, "DEFAULT_CURRENCY", "IDR")
+    assert normalize_raw({"currency": None})["currency"] == "IDR"
+    assert normalize_raw({})["currency"] == "IDR"              # key absent entirely
+    assert normalize_raw({"currency": "   "})["currency"] == "IDR"
+
+
+def test_currency_default_does_not_override_present(monkeypatch):
+    monkeypatch.setattr(config, "DEFAULT_CURRENCY", "IDR")
+    assert normalize_raw({"currency": "USD"})["currency"] == "USD"
+
+
+def test_currency_default_off_keeps_none(monkeypatch):
+    monkeypatch.setattr(config, "DEFAULT_CURRENCY", None)
+    assert normalize_raw({"currency": None})["currency"] is None
